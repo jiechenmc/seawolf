@@ -8,11 +8,11 @@ WORKDIR /app/btcwallet
 
 RUN go install -v . ./cmd/...
 
-# RUN btcwallet -u rpcuser -P rpcpass --create 
+# RUN btcwallet --simnet -u rpcuser -P rpcpass --create 
 
 
 ENV PATH="/go/bin:${PATH}"
 ENV btcdpassword="rpcpass"
 ENV btcdusername="rpcuser"
 
-# RUN btcwallet -u rpcuser -P rpcpass
+# RUN btcwallet --simnet -u rpcuser -P rpcpass

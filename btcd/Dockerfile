@@ -10,6 +10,6 @@ WORKDIR /app/btcd
 RUN go install -v . ./cmd/...
 
 
-CMD [ "btcd", "-u", "rpcuser", "-P", "rpcpass" ]
+CMD [ "btcd", "-u", "rpcuser", "-P", "rpcpass", "--simnet" ]
 
 ENV PATH="/go/bin:${PATH}"

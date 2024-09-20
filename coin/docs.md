@@ -1,0 +1,1 @@
+[JSON RPC](https://github.com/btcsuite/btcd/blob/master/docs/json_rpc_api.md#setgenerate)
