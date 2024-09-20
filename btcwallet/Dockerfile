@@ -16,6 +16,3 @@ ENV btcdpassword="rpcpass"
 ENV btcdusername="rpcuser"
 
 # RUN btcwallet -u rpcuser -P rpcpass
-
-# CMD [ "btcwallet", "-u", "rpcuser", "-P", "rpcpass" ]
-

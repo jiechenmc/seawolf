@@ -1,8 +1,8 @@
 Filesharing with rewards 💰💰💰
 
-# To start the application
+# To bootstrap the application
 ```bash
-- docker compose up --build # -d to run in the background
+- ./bootstrap.sh 
 ```
 
 # To create a wallet
