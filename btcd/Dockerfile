@@ -14,10 +14,12 @@ RUN go install -v . ./cmd/...
 WORKDIR /app/btcwallet
 RUN go install -v . ./cmd/...
 
-# RUN cp /root/.btcd/rpc.cert /root/.btcwallet/btcd.cert
+
+RUN echo "alias btcctl='btcctl --$btcdnetwork --wallet --rpcuser=$btcdusername --rpcpass=$btcdpassword'" >> /etc/bash.bashrc
 
 # CMD [ "btcd", "-u", "rpcuser", "-P", "rpcpass", "--simnet", "--miningaddr", "SZoGnna9NsjkZWusgFJ3DGirJpq22GqmES" ]
 
 ENV PATH="/go/bin:${PATH}"
 ENV btcdusername="rpcuser"
 ENV btcdpassword="rpcpass"
+ENV btcdnetwork="simnet"
