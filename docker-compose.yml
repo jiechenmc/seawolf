@@ -6,6 +6,7 @@ services:
       - BTCWALLET:/root/.btcwallet
       - ./btcd/btcd.conf:/root/.btcd/btcd.conf
       - ./btcd/btcwallet.conf:/root/.btcwallet/btcwallet.conf
+      - ./btcd/server/:/app/server
     tty: true
 
 volumes:

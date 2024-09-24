@@ -15,7 +15,7 @@ WORKDIR /app/btcwallet
 RUN go install -v . ./cmd/...
 
 
-RUN echo "alias btcctl='btcctl --$btcdnetwork --wallet --rpcuser=$btcdusername --rpcpass=$btcdpassword'" >> /etc/bash.bashrc
+RUN echo "alias bctl='btcctl --$btcdnetwork --rpcuser=$btcdusername --rpcpass=$btcdpassword'" >> /etc/bash.bashrc
 
 # CMD [ "btcd", "-u", "rpcuser", "-P", "rpcpass", "--simnet", "--miningaddr", "SZoGnna9NsjkZWusgFJ3DGirJpq22GqmES" ]
 
