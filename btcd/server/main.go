@@ -8,7 +8,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/rpcclient"
@@ -59,12 +58,12 @@ func main() {
 	// For this example gracefully shutdown the client after 10 seconds.
 	// Ordinarily when to shutdown the client is highly application
 	// specific.
-	log.Println("Client shutdown in 10 seconds...")
-	time.AfterFunc(time.Second*10, func() {
-		log.Println("Client shutting down...")
-		client.Shutdown()
-		log.Println("Client shutdown complete.")
-	})
+	// log.Println("Client shutdown in 10 seconds...")
+	// time.AfterFunc(time.Second*10, func() {
+	// 	log.Println("Client shutting down...")
+	// 	client.Shutdown()
+	// 	log.Println("Client shutdown complete.")
+	// })
 
 	// Wait until the client either shuts down gracefully (or the user
 	// terminates the process with Ctrl+C).
