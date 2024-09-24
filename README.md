@@ -11,7 +11,7 @@ Filesharing with rewards 💰💰💰
 - docker exec -it seawolf-btcd-1 bash
 - bctl getnewaddress # SKIP IF ALREADY EXISTS
 - bctl listreceivedbyaddress # SKIP IF ALREADY KNOW ADDRESS
-- btcd --$btcdnetwork --rpcuser=$btcdusername --rpcpass=$btcdpassword --miningaddr SZoGnna9NsjkZWusgFJ3DGirJpq22GqmES # Start btcd with a mining address
+- tmux new btcd --$btcdnetwork --rpcuser=$btcdusername --rpcpass=$btcdpassword --miningaddr SZoGnna9NsjkZWusgFJ3DGirJpq22GqmES # Start btcd with a mining address
 - cp /root/.btcd/rpc.cert /root/.btcwallet/btcd.cert # IMPORTANT; NEED TO BE DONE BEFORE FIRST STEP IF NOT FIRST TIME
 ```
 
@@ -19,7 +19,7 @@ Filesharing with rewards 💰💰💰
 ```bash
 - docker exec -it seawolf-btcd-1 bash
 - btcwallet --$btcdnetwork -u $btcdusername -P $btcdpassword --create  # Run this once to create a wallet; use the seed in discord
-- btcwallet --$btcdnetwork -u $btcdusername -P $btcdpassword # Run this anytime u want to start the wallet
+- tmux new btcwallet --$btcdnetwork -u $btcdusername -P $btcdpassword # Run this anytime u want to start the wallet
 ```
 
 # Common Commands
