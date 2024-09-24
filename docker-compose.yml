@@ -2,12 +2,10 @@ services:
   btcd:
     build: btcd
     network_mode: host
-
-  btcwallet:
-    build: btcwallet
-    network_mode: host
     volumes:
       - BTCWALLET:/root/.btcwallet
+      - ./btcd/btcd.conf:/root/.btcd/btcd.conf
+      - ./btcd/btcwallet.conf:/root/.btcwallet/btcwallet.conf
     tty: true
 
 volumes:
