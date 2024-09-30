@@ -11,7 +11,7 @@ import (
 const databasePath = "seawolf_p2p.db"
 const createTableQuery = `CREATE TABLE IF NOT EXISTS users
                             (id INTEGER PRIMARY KEY, username TEXT UNIQUE, password_hash TEXT,
-                                private_key_iv TEXT, private_key_ciphertext TEXT, private_key_salt TEXT)`
+                                private_key_ciphertext TEXT, private_key_iv TEXT, private_key_salt TEXT)`
 
 func dbOpen() (*sql.DB, error) {
     db, err := sql.Open("sqlite3", databasePath)
@@ -30,7 +30,7 @@ func dbOpen() (*sql.DB, error) {
     return db, nil
 }
 
-func dbGetUser(db *sql.DB, username string, passwordHash *[]byte, privateKeyIV *[]byte, privateKeyCiphertext *[]byte, privateKeySalt *[]byte) (int, error) {
+func dbGetUser(db *sql.DB, username string, passwordHash *[]byte, privateKeyCiphertext *[]byte, privateKeyIV *[]byte, privateKeySalt *[]byte) (int, error) {
     var err error
     //Establish connection to database if doesn't exist
     if db == nil {
@@ -46,8 +46,8 @@ func dbGetUser(db *sql.DB, username string, passwordHash *[]byte, privateKeyIV *
     var privateKeySaltStr string
     var passwordHashStr string
 
-    err = db.QueryRow(`SELECT password_hash, private_key_iv, private_key_ciphertext, private_key_salt FROM users WHERE username= ?`, username).
-                        Scan(&passwordHashStr, &privateKeyIVStr, &privateKeyCiphertextStr, &privateKeySaltStr)
+    err = db.QueryRow(`SELECT password_hash, private_key_ciphertext, private_key_iv, private_key_salt FROM users WHERE username= ?`, username).
+                        Scan(&passwordHashStr, &privateKeyCiphertextStr, &privateKeyIVStr, &privateKeySaltStr)
     if err != nil {
         if err == sql.ErrNoRows {
             return 0, nil
@@ -59,14 +59,14 @@ func dbGetUser(db *sql.DB, username string, passwordHash *[]byte, privateKeyIV *
     if passwordHash != nil {
         *passwordHash, err = hex.DecodeString(passwordHashStr)
     }
+    if privateKeyCiphertext != nil {
+        *privateKeyCiphertext, err = hex.DecodeString(privateKeyCiphertextStr)
+    }
     if privateKeyIV != nil {
         *privateKeyIV, err = hex.DecodeString(privateKeyIVStr)
     }
     if privateKeySalt != nil {
         *privateKeySalt, err = hex.DecodeString(privateKeySaltStr)
-    }
-    if privateKeyCiphertext != nil {
-        *privateKeyCiphertext, err = hex.DecodeString(privateKeyCiphertextStr)
     }
 
     if err != nil {
@@ -77,7 +77,7 @@ func dbGetUser(db *sql.DB, username string, passwordHash *[]byte, privateKeyIV *
     return 1, nil
 }
 
-func dbAddUser(db *sql.DB, username string, passwordHash []byte, privateKeyIV []byte, privateKeyCiphertext []byte, privateKeySalt []byte) error {
+func dbAddUser(db *sql.DB, username string, passwordHash []byte, privateKeyCiphertext []byte, privateKeyIV []byte, privateKeySalt []byte) error {
     var err error
     //Establish connection to database if doesn't exist
     if db == nil {
@@ -88,11 +88,11 @@ func dbAddUser(db *sql.DB, username string, passwordHash []byte, privateKeyIV []
         defer db.Close()
     }
 
-    _, err = db.Exec(`INSERT INTO users (username, password_hash, private_key_iv, private_key_ciphertext, private_key_salt) VALUES (?, ?, ?, ?, ?)`,
+    _, err = db.Exec(`INSERT INTO users (username, password_hash, private_key_ciphertext, private_key_iv, private_key_salt) VALUES (?, ?, ?, ?, ?)`,
         username,
         hex.EncodeToString(passwordHash),
-        hex.EncodeToString(privateKeyIV),
         hex.EncodeToString(privateKeyCiphertext),
+        hex.EncodeToString(privateKeyIV),
         hex.EncodeToString(privateKeySalt))
 
     if err != nil {

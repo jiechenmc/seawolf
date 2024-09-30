@@ -2,19 +2,10 @@ package api
 
 import (
     "errors"
-    "bytes"
     "fmt"
-    "io"
     "os"
-    "crypto/aes"
-    "crypto/cipher"
-    "crypto/rand"
 
-    "github.com/libp2p/go-libp2p/core/crypto"
     "github.com/libp2p/go-libp2p/core/host"
-    "golang.org/x/crypto/bcrypt"
-    "golang.org/x/crypto/pbkdf2"
-    "golang.org/x/crypto/sha3"
 )
 
 type P2PService struct {}
@@ -25,7 +16,6 @@ func (s *P2PService) Login(username string, password string) (string, error) {
     if p2pHost != nil {
         return "", alreadyLoggedIn
     }
-    //Open sqlite database
     db, err := dbOpen()
     if err != nil {
         return "", err
@@ -33,11 +23,12 @@ func (s *P2PService) Login(username string, password string) (string, error) {
     defer db.Close()
 
     var passwordHash []byte;
-    var privateKeyIV []byte;
     var privateKeyCiphertext []byte;
+    var privateKeyIV []byte;
     var privateKeySalt []byte;
 
-    count, err := dbGetUser(db, username, &passwordHash, &privateKeyIV, &privateKeyCiphertext, &privateKeySalt)
+    //Get user info from database
+    count, err := dbGetUser(db, username, &passwordHash, &privateKeyCiphertext, &privateKeyIV, &privateKeySalt)
     if err != nil {
         return "", err
     }
@@ -46,30 +37,11 @@ func (s *P2PService) Login(username string, password string) (string, error) {
     }
 
     passwordBytes := []byte(password)
-    err = bcrypt.CompareHashAndPassword(passwordHash, passwordBytes)
-    if err != nil {
+    if !cipherCompareHashAndPassword(passwordHash, passwordBytes) {
         return "", invalidCredentials
     }
 
-    //Recover key from password
-    derivedKey := pbkdf2.Key(passwordBytes, privateKeySalt, 100000, 32, sha3.New256)
-
-    block, err := aes.NewCipher(derivedKey)
-    if err != nil {
-        fmt.Fprintf(os.Stderr, "Failed to create AES cipher. %v\n", err)
-        return "", internalError
-    }
-
-    mode := cipher.NewCBCDecrypter(block, privateKeyIV)
-
-    privateKeyBytes := make([]byte, len(privateKeyCiphertext))
-    mode.CryptBlocks(privateKeyBytes, privateKeyCiphertext)
-
-    privateKey, err := crypto.UnmarshalPrivateKey(privateKeyBytes[:68])
-    if err != nil {
-        fmt.Fprintf(os.Stderr, "Failed to unmarshal private key. %v\n", err)
-        return "", internalError
-    }
+    privateKey, err := cipherDecryptPrivateKey(passwordBytes, privateKeyCiphertext, privateKeyIV, privateKeySalt)
 
     //Create libp2p host with private key
     newHost, err := createLibp2pHost(&privateKey)
@@ -95,63 +67,23 @@ func (s *P2PService) Register(username string, password string) (string, error) 
         return "", errors.New("Username already exists")
     }
 
-    //Hash password with bcrypt
     passwordBytes := []byte(password)
-    passwordHash, err := bcrypt.GenerateFromPassword(passwordBytes, bcrypt.DefaultCost)   
+    //Hash password
+    passwordHash, err := cipherEncryptPassword(passwordBytes)
     if err != nil {
-        fmt.Fprintf(os.Stderr, "Failed to generate hash password. %v\n", err)
-        return "", internalError
+        return "", err
     }
 
-    //Username does not exist. Generate a rpc.public/private key pair for libp2p.
-    privateKey, _, err := crypto.GenerateEd25519Key(rand.Reader)
+    //Username does not exist. Generate a key pair for libp2p.
+    var privateKeyCiphertext []byte
+    var privateKeyIV []byte
+    var privateKeySalt []byte
+    privateKeyCiphertext, err = cipherGenerateEncryptedPrivateKey(passwordBytes, &privateKeyIV, &privateKeySalt)
     if err != nil {
-        fmt.Fprintf(os.Stderr, "Failed to generate public/private key. %v\n", err)
-        return "", internalError
+        return "", err
     }
 
-    privateKeyBytes, err := crypto.MarshalPrivateKey(privateKey)
-    if err != nil {
-        fmt.Fprintf(os.Stderr, "Failed to marshal private key. %v\n", err)
-        return "", internalError
-    }
-
-    salt := make([]byte, 16)
-    _, err = io.ReadFull(rand.Reader, salt)
-    if err != nil {
-        fmt.Fprintf(os.Stderr, "Failed to generate salt. %v\n", err)
-        return "", internalError
-    }
-
-    //Create a encryption key from our password
-    derivedKey := pbkdf2.Key(passwordBytes, salt, 100000, 32, sha3.New256)
-
-    block, err := aes.NewCipher(derivedKey)
-    if err != nil {
-        fmt.Fprintf(os.Stderr, "Failed to create AES cipher. %v\n", err)
-        return "", internalError
-    }
-
-    blockSize := block.BlockSize()
-    padding := 0 
-    if len(privateKeyBytes) % blockSize != 0 {
-        padding = blockSize - (len(privateKeyBytes) % blockSize)
-    }
-    privateKeyCiphertext := make([]byte, len(privateKeyBytes) + padding)
-    paddedPrivateKeyBytes := append(privateKeyBytes, bytes.Repeat([]byte{byte(padding)}, padding)...)
-
-    privateKeyIV := make([]byte, blockSize)
-    _, err = io.ReadFull(rand.Reader, privateKeyIV)
-    if err != nil {
-        fmt.Fprintf(os.Stderr, "Failed to generate initialization vector. %v\n", err)
-        return "", internalError
-    }
-
-    //Encrypt and store results into database
-    mode := cipher.NewCBCEncrypter(block, privateKeyIV)
-    mode.CryptBlocks(privateKeyCiphertext, paddedPrivateKeyBytes)
-
-    err = dbAddUser(db, username, passwordHash, privateKeyIV, privateKeyCiphertext, salt)
+    err = dbAddUser(db, username, passwordHash, privateKeyCiphertext, privateKeyIV, privateKeySalt)
     if err != nil {
         return "", err
     }
