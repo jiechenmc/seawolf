@@ -8,6 +8,7 @@ import (
     "crypto/aes"
     "crypto/cipher"
     "crypto/rand"
+    "crypto/sha256"
 
     "github.com/libp2p/go-libp2p/core/crypto"
     "golang.org/x/crypto/bcrypt"
@@ -16,7 +17,7 @@ import (
 )
 
 func cipherEncryptPassword(passwordBytes []byte) ([]byte, error) {
-    passwordHash, err := bcrypt.GenerateFromPassword(passwordBytes, bcrypt.DefaultCost)   
+    passwordHash, err := bcrypt.GenerateFromPassword(passwordBytes, bcrypt.DefaultCost)
     if err != nil {
         fmt.Fprintf(os.Stderr, "Failed to generate hash password. %v\n", err)
         return nil, internalError
@@ -32,9 +33,17 @@ func cipherCompareHashAndPassword(passwordHash []byte, passwordBytes []byte) boo
     return true
 }
 
-func cipherGenerateEncryptedPrivateKey(passwordBytes []byte, privateKeyIV *[]byte, privateKeySalt *[]byte) ([]byte, error) {
-    //Username does not exist. Generate a rpc.public/private key pair for libp2p.
-    privateKey, _, err := crypto.GenerateEd25519Key(rand.Reader)
+func cipherGenerateEncryptedPrivateKey(passwordBytes []byte, seedBytes []byte, privateKeyIV *[]byte, privateKeySalt *[]byte) ([]byte, error) {
+    var reader io.Reader
+    //If seed is provided, use this seed to generate private key
+    if seedBytes != nil {
+        hash := sha256.Sum256(seedBytes)
+        reader = bytes.NewReader(hash[:])
+    } else {
+        reader = rand.Reader
+    }
+    //Generate a public/private key pair
+    privateKey, _, err := crypto.GenerateEd25519Key(reader)
     if err != nil {
         fmt.Fprintf(os.Stderr, "Failed to generate public/private key. %v\n", err)
         return nil, internalError
@@ -65,7 +74,7 @@ func cipherGenerateEncryptedPrivateKey(passwordBytes []byte, privateKeyIV *[]byt
     }
 
     blockSize := block.BlockSize()
-    padding := 0 
+    padding := 0
     if len(privateKeyBytes) % blockSize != 0 {
         padding = blockSize - (len(privateKeyBytes) % blockSize)
     }

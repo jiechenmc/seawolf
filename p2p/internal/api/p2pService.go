@@ -51,10 +51,18 @@ func (s *P2PService) Login(username string, password string) (string, error) {
     }
     p2pHost = &newHost
 
+    //Connect to peer
+
     return "success",nil
 }
 
-func (s *P2PService) Register(username string, password string) (string, error) {
+func (s *P2PService) Register(username string, password string, seed string) (string, error) {
+    //Optional seed parameter for private key generation
+    var seedBytes []byte = nil
+    if seed != "" {
+        seedBytes = []byte(seed)
+    }
+
     db, err := dbOpen()
     if err != nil {
         return "", err
@@ -78,7 +86,7 @@ func (s *P2PService) Register(username string, password string) (string, error) 
     var privateKeyCiphertext []byte
     var privateKeyIV []byte
     var privateKeySalt []byte
-    privateKeyCiphertext, err = cipherGenerateEncryptedPrivateKey(passwordBytes, &privateKeyIV, &privateKeySalt)
+    privateKeyCiphertext, err = cipherGenerateEncryptedPrivateKey(passwordBytes, seedBytes, &privateKeyIV, &privateKeySalt)
     if err != nil {
         return "", err
     }

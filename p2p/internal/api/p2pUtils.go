@@ -11,6 +11,8 @@ import (
     record "github.com/libp2p/go-libp2p-record"
 )
 
+/* CODE FROM TA TUTORIAL */
+
 type CustomValidator struct{}
 
 func (v *CustomValidator) Validate(key string, value []byte) error {
@@ -55,3 +57,5 @@ func setupDHT(ctx context.Context, h host.Host) (*dht.IpfsDHT, error) {
     }
 	return kadDHT, err
 }
+
+
