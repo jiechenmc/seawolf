@@ -1,8 +1,7 @@
 package api
 
 import (
-    "fmt"
-    "os"
+    "log"
     "io"
     "bytes"
     "crypto/aes"
@@ -19,7 +18,7 @@ import (
 func cipherEncryptPassword(passwordBytes []byte) ([]byte, error) {
     passwordHash, err := bcrypt.GenerateFromPassword(passwordBytes, bcrypt.DefaultCost)
     if err != nil {
-        fmt.Fprintf(os.Stderr, "Failed to generate hash password. %v\n", err)
+        log.Printf("Failed to generate hash password. %v\n", err)
         return nil, internalError
     }
     return passwordHash, err
@@ -45,14 +44,14 @@ func cipherGenerateEncryptedPrivateKey(passwordBytes []byte, seedBytes []byte, p
     //Generate a public/private key pair
     privateKey, _, err := crypto.GenerateEd25519Key(reader)
     if err != nil {
-        fmt.Fprintf(os.Stderr, "Failed to generate public/private key. %v\n", err)
+        log.Printf("Failed to generate public/private key. %v\n", err)
         return nil, internalError
     }
 
     //Serialize private key to raw bytes
     privateKeyBytes, err := crypto.MarshalPrivateKey(privateKey)
     if err != nil {
-        fmt.Fprintf(os.Stderr, "Failed to marshal private key. %v\n", err)
+        log.Printf("Failed to marshal private key. %v\n", err)
         return nil, internalError
     }
 
@@ -60,7 +59,7 @@ func cipherGenerateEncryptedPrivateKey(passwordBytes []byte, seedBytes []byte, p
     *privateKeySalt = make([]byte, 16)
     _, err = io.ReadFull(rand.Reader, *privateKeySalt)
     if err != nil {
-        fmt.Fprintf(os.Stderr, "Failed to generate salt. %v\n", err)
+        log.Printf("Failed to generate salt. %v\n", err)
         return nil, internalError
     }
 
@@ -69,7 +68,7 @@ func cipherGenerateEncryptedPrivateKey(passwordBytes []byte, seedBytes []byte, p
 
     block, err := aes.NewCipher(derivedKey)
     if err != nil {
-        fmt.Fprintf(os.Stderr, "Failed to create AES cipher. %v\n", err)
+        log.Printf("Failed to create AES cipher. %v\n", err)
         return nil, internalError
     }
 
@@ -85,7 +84,7 @@ func cipherGenerateEncryptedPrivateKey(passwordBytes []byte, seedBytes []byte, p
     *privateKeyIV = make([]byte, blockSize)
     _, err = io.ReadFull(rand.Reader, *privateKeyIV)
     if err != nil {
-        fmt.Fprintf(os.Stderr, "Failed to generate initialization vector. %v\n", err)
+        log.Printf("Failed to generate initialization vector. %v\n", err)
         return nil, internalError
     }
 
@@ -102,7 +101,7 @@ func cipherDecryptPrivateKey(passwordBytes []byte, privateKeyCiphertext []byte, 
     derivedKey := pbkdf2.Key(passwordBytes, privateKeySalt, 100000, 32, sha3.New256)
     block, err := aes.NewCipher(derivedKey)
     if err != nil {
-        fmt.Fprintf(os.Stderr, "Failed to create AES cipher. %v\n", err)
+        log.Printf("Failed to create AES cipher. %v\n", err)
         return nil, internalError
     }
     //Decrypt private key ciphertext
@@ -113,7 +112,7 @@ func cipherDecryptPrivateKey(passwordBytes []byte, privateKeyCiphertext []byte, 
 
     privateKey, err := crypto.UnmarshalPrivateKey(privateKeyBytes[:68])
     if err != nil {
-        fmt.Fprintf(os.Stderr, "Failed to unmarshal private key. %v\n", err)
+        log.Printf("Failed to unmarshal private key. %v\n", err)
         return nil, internalError
     }
     return privateKey, nil

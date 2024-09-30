@@ -1,8 +1,7 @@
 package api
 
 import (
-    "fmt"
-    "os"
+    "log"
     "encoding/hex"
     "database/sql"
     _ "github.com/mattn/go-sqlite3"
@@ -16,7 +15,7 @@ const createTableQuery = `CREATE TABLE IF NOT EXISTS users
 func dbOpen() (*sql.DB, error) {
     db, err := sql.Open("sqlite3", databasePath)
     if err != nil {
-        fmt.Fprintf(os.Stderr, "Failed to open SQLITE database. %v\n", err)
+        log.Printf("Failed to open SQLITE database. %v\n", err)
         return db, internalError
     }
 
@@ -24,7 +23,7 @@ func dbOpen() (*sql.DB, error) {
     _, err = db.Exec(createTableQuery)
     if err != nil {
         db.Close()
-        fmt.Fprintf(os.Stderr, "Failed to create user table. %v\n", err)
+        log.Printf("Failed to create user table. %v\n", err)
         return db, internalError
     }
     return db, nil
@@ -52,7 +51,7 @@ func dbGetUser(db *sql.DB, username string, passwordHash *[]byte, privateKeyCiph
         if err == sql.ErrNoRows {
             return 0, nil
         }
-        fmt.Fprintf(os.Stderr, "Failed to query SQLITE database. %v\n", err)
+        log.Printf("Failed to query SQLITE database. %v\n", err)
         return 0, internalError
     }
     
@@ -70,7 +69,7 @@ func dbGetUser(db *sql.DB, username string, passwordHash *[]byte, privateKeyCiph
     }
 
     if err != nil {
-        fmt.Fprintf(os.Stderr, "Failed to decode hex strings. %v\n", err)
+        log.Printf("Failed to decode hex strings. %v\n", err)
         return 0, internalError
     }
 
@@ -96,7 +95,7 @@ func dbAddUser(db *sql.DB, username string, passwordHash []byte, privateKeyCiphe
         hex.EncodeToString(privateKeySalt))
 
     if err != nil {
-        fmt.Fprintf(os.Stderr, "Failed to push user to database. %v\n", err)
+        log.Printf("Failed to push user to database. %v\n", err)
         return internalError
     }
 
