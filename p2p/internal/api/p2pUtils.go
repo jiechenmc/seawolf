@@ -3,12 +3,12 @@ package api
 import (
     "context"
     "github.com/libp2p/go-libp2p"
-	"github.com/libp2p/go-libp2p/core/host"
-	"github.com/libp2p/go-libp2p/core/peer"
+    "github.com/libp2p/go-libp2p/core/host"
+    "github.com/libp2p/go-libp2p/core/peer"
     "github.com/multiformats/go-multiaddr"
     "github.com/libp2p/go-libp2p/core/crypto"
-	dht "github.com/libp2p/go-libp2p-kad-dht"
-	record "github.com/libp2p/go-libp2p-record"
+    dht "github.com/libp2p/go-libp2p-kad-dht"
+    record "github.com/libp2p/go-libp2p-record"
 )
 
 type CustomValidator struct{}

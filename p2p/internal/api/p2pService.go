@@ -6,18 +6,18 @@ import (
     "fmt"
     "io"
     "os"
-	"crypto/aes"
-	"crypto/cipher"
-	"crypto/rand"
-	"database/sql"
-	"encoding/hex"
+    "crypto/aes"
+    "crypto/cipher"
+    "crypto/rand"
+    "database/sql"
+    "encoding/hex"
 	
     "github.com/libp2p/go-libp2p/core/crypto"
-	"github.com/libp2p/go-libp2p/core/host"
+    "github.com/libp2p/go-libp2p/core/host"
     _ "github.com/mattn/go-sqlite3"
     "golang.org/x/crypto/bcrypt"
-	"golang.org/x/crypto/pbkdf2"
-	"golang.org/x/crypto/sha3"
+    "golang.org/x/crypto/pbkdf2"
+    "golang.org/x/crypto/sha3"
 )
 
 type P2PService struct {}
