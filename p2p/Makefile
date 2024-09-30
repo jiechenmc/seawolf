@@ -2,7 +2,10 @@ BUILD_DIR=$(PWD)/bin
 
 all: build
 
-build:
+bin:
+	mkdir -p $(BUILD_DIR)
+
+build: bin
 	go build -C $(BUILD_DIR) $(PWD)/cmd/p2p/main.go
 
 clean:
