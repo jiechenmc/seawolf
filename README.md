@@ -12,9 +12,9 @@ Filesharing with rewards 💰💰💰
 
 ```bash
 - docker exec -it seawolf-btcd-1 bash
-- bctl getnewaddress # SKIP IF ALREADY EXISTS
-- bctl listreceivedbyaddress # SKIP IF ALREADY KNOW ADDRESS
-- tmux new btcd --$btcdnetwork --rpcuser=$btcdusername --rpcpass=$btcdpassword --miningaddr SZoGnna9NsjkZWusgFJ3DGirJpq22GqmES # Start btcd with a mining address
+- bctl --wallet getnewaddress # SKIP IF ALREADY EXISTS
+- bctl --wallet listreceivedbyaddress # SKIP IF ALREADY KNOW ADDRESS
+- tmux new btcd --$btcdnetwork --rpcuser=$btcdusername --rpcpass=$btcdpassword --miningaddr SV3AKDppayuuBVADVSbiAs6Nxgr7HMmfw6 # Start btcd with a mining address
 - cp /root/.btcd/rpc.cert /root/.btcwallet/btcd.cert # IMPORTANT; NEED TO BE DONE BEFORE FIRST STEP IF NOT FIRST TIME
 ```
 

@@ -14,6 +14,31 @@ import (
 	"github.com/davecgh/go-spew/spew"
 )
 
+// -> Admin
+// createwallet <name> <passphrase>
+
+// Note to self
+//
+// -> Money
+// getbalance
+// listunspent
+// listreceivedbyaddress
+// sendtoaddress <addr> <amt>
+//
+// --> Transactions are processed when blocks are mined! <--
+
+// -> Logistics
+// getblockchaininfo
+// getaccountaddress <account>
+// gettransaction <txid>
+// getrawmempool <- mempool shows pending transactions
+
+// current addresses for testing:
+// SQvC2vyTrCtZnEoqhRMJozK3k2ovauhCEt
+// SV3AKDppayuuBVADVSbiAs6Nxgr7HMmfw6
+// seed:
+// 6779ea5e457d009b17b842510c755d89d781cb56507d05ae3c9efec062567b26
+
 func main() {
 	// Only override the handlers for notifications you care about.
 	// Also note most of the handlers will only be called if you register
