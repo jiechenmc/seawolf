@@ -1,6 +1,7 @@
 package api
 
 import (
+	"github.com/btcsuite/btcd/btcjson"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -16,6 +17,11 @@ import (
 // sendtoaddress <addr> <amt>
 //
 // --> Transactions are processed when blocks are mined! <--
+
+func CreateWallet(client *rpcclient.Client, walletName string) (*btcjson.CreateWalletResult, error) {
+	result, err := client.CreateWallet(walletName)
+	return result, err
+}
 
 func GetBalance(client *rpcclient.Client) (float64, error) {
 	balance, err := client.GetBalance("*")
