@@ -8,6 +8,9 @@ bin:
 build: bin
 	go build -C $(BUILD_DIR) $(PWD)/cmd/p2p/main.go
 
+run: build
+	$(BUILD_DIR)/main
+
 clean:
 	rm -rf $(BUILD_DIR)/*
 

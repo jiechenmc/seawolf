@@ -5,6 +5,8 @@ import (
 )
 
 var internalError = errors.New("Internal error")
-var invalidCredentials = errors.New("Incorrect username or password")
-var alreadyLoggedIn = errors.New("Already logged in")
-var peerConnectionError = errors.New("Failed to connect to peer")
+var invalidCredentials = errors.New("Error: Incorrect username or password")
+var alreadyLoggedIn = errors.New("Error: Already logged in")
+var notLoggedIn = errors.New("Error: Not logged in")
+var peerConnectionError = errors.New("Error: Failed to connect to peer")
+var invalidParams = errors.New("Error: Invalid parameter(s)")

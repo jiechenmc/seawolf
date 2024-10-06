@@ -5,16 +5,42 @@ import (
     "errors"
     "context"
     "github.com/libp2p/go-libp2p/core/host"
+    "github.com/ipfs/boxo/bitswap"
     dht "github.com/libp2p/go-libp2p-kad-dht"
+    blockstore "github.com/ipfs/boxo/blockstore"
+
+	// "path/filepath"
+	// "github.com/btcsuite/btcd/btcutil"
+	// "github.com/btcsuite/btcd/rpcclient"
 )
 
-type P2PService struct {}
+type P2PService struct {
+    username *string
+    rpcUsername *string
+    rpcPassword *string
+    p2pHost *host.Host
+    kadDHT *dht.IpfsDHT
+    exchange *bitswap.Bitswap
+    bstore *blockstore.Blockstore
+}
 
-var p2pHost *host.Host = nil;
-var kadDHT *dht.IpfsDHT = nil;
+func (s *P2PService) ConnectToPeer(ctx context.Context, peerID string) (string, error) {
+    err := p2pConnectToPeerUsingRelay(ctx, *s.p2pHost, peerID)
+    if err == nil {
+        return "", err
+    }
+    return "success", nil
+}
 
+func (s *P2PService) GetPeers() error {
+    p2pPrintConnectedPeers(*s.p2pHost)
+    p2pPrintRoutingTable(s.kadDHT)
+    p2pPrintKnownPeers(*s.p2pHost)
+
+    return nil
+}
 func (s *P2PService) Login(username string, password string) (string, error) {
-    if p2pHost != nil {
+    if s.p2pHost != nil || s.username != nil {
         return "", alreadyLoggedIn
     }
     db, err := dbOpen()
@@ -23,10 +49,10 @@ func (s *P2PService) Login(username string, password string) (string, error) {
     }
     defer db.Close()
 
-    var passwordHash []byte;
-    var privateKeyCiphertext []byte;
-    var privateKeyIV []byte;
-    var privateKeySalt []byte;
+    var passwordHash []byte
+    var privateKeyCiphertext []byte
+    var privateKeyIV []byte
+    var privateKeySalt []byte
 
     //Get user info from database
     count, err := dbGetUser(db, username, &passwordHash, &privateKeyCiphertext, &privateKeyIV, &privateKeySalt)
@@ -34,52 +60,50 @@ func (s *P2PService) Login(username string, password string) (string, error) {
         return "", err
     }
     if count == 0 {
-        log.Printf("Attempted login from unregistered user '%v'\n", username);
+        log.Printf("Attempted login from unregistered user '%v'\n", username)
         return "", invalidCredentials
     }
 
     passwordBytes := []byte(password)
     if !cipherCompareHashAndPassword(passwordHash, passwordBytes) {
-        log.Printf("Attempted login to user '%v' failed\n", username);
+        log.Printf("Attempted login to user '%v' failed\n", username)
         return "", invalidCredentials
     }
 
     privateKey, err := cipherDecryptPrivateKey(passwordBytes, privateKeyCiphertext, privateKeyIV, privateKeySalt)
+    ctx := context.Background()
 
     //Create libp2p host with private key
-    newHost, err := p2pCreateHost(&privateKey)
+    newHost, err := p2pCreateHost(ctx, &privateKey)
     if err != nil {
         return "", err
     }
-    p2pHost = &newHost
-    log.Printf("Successfully created libp2p host with peer ID: %v\n", (*p2pHost).ID());
+    s.p2pHost = &newHost
+    log.Printf("Successfully created libp2p host with peer ID: %v\n", (*s.p2pHost).ID())
 
-    kadDHT, err = p2pCreateDHT(context.Background(), *p2pHost)
+    //Connect to bootstrap node
+    err = p2pConnectToPeer(ctx, *s.p2pHost, bootstrapNodeAddr)
     if err != nil {
-        //Destroy libp2p host
-        closeErr := (*p2pHost).Close()
-        if closeErr != nil {
-            log.Fatal("Failed to clean up libp2p host after DHT creation failure")
-        }
-        p2pHost = nil
-        return "", err
-    }
-    log.Printf("Successfully created DHT instance\n");
-
-
-    //Connect to peer
-    err = p2pConnectToPeer(*p2pHost, bootstrapNodeAddr);
-    if err != nil {
-        //Destroy libp2p host
-        closeErr := (*p2pHost).Close()
-        if closeErr != nil {
-            log.Fatal("Failed to clean up libp2p host after peer connection failure")
-        }
-        p2pHost = nil
+        //Delete libp2p host
+        p2pDeleteHost(*s.p2pHost)
+        s.p2pHost = nil
         return "", err
     }
 
-    log.Printf("Successfully logged in user '%v'\n", username);
+    s.kadDHT, err = p2pCreateDHT(ctx, *s.p2pHost)
+    if err != nil {
+        //Delete libp2p host
+        p2pDeleteHost(*s.p2pHost)
+        s.p2pHost = nil
+        return "", err
+    }
+    log.Printf("Successfully created DHT instance\n")
+
+    //Create bitswap instance
+    s.exchange, s.bstore = bitswapCreate(ctx, *s.p2pHost, s.kadDHT)
+
+    s.username = &username
+    log.Printf("Successfully logged in user '%v'\n", *s.username)
     return "success",nil
 }
 
@@ -123,6 +147,63 @@ func (s *P2PService) Register(username string, password string, seed string) (st
         return "", err
     }
 
-    log.Printf("Successfully registered user '%v'\n", username);
+    log.Printf("Successfully registered user '%v'\n", username)
+    return "success", nil
+}
+
+func (s *P2PService) AddWallet(password string, rpcUsername string, rpcPassword string) (string, error) {
+    if s.username == nil {
+        log.Printf("Attempted to add wallet when not logged in\n")
+        return "", notLoggedIn
+    }
+    db, err := dbOpen()
+    if err != nil {
+        return "", err
+    }
+    defer db.Close()
+
+
+    var passwordHash []byte
+    //Get user info from database
+    count, err := dbGetUser(db, *s.username, &passwordHash, nil, nil, nil)
+    if err != nil {
+        return "", err
+    }
+    if count == 0 {
+        log.Printf("Unable to find user '%v' in database\n", *s.username)
+        return "", internalError
+    }
+
+    //Ensure password matches currently logged in user's password
+    passwordBytes := []byte(password)
+    if !cipherCompareHashAndPassword(passwordHash, passwordBytes) {
+        log.Printf("Attempt to add wallet to user '%v' failed\n", *s.username)
+        return "", invalidCredentials
+    }
+    return "", nil
+    //Query local btcwallet daemon to ensure rpcUsername and rpcPassword are valid
+}
+
+func (s *P2PService) PutFile(inputFile string) (string, error) {
+    if s.username == nil || s.exchange == nil {
+        log.Printf("Attempted to put file when not logged in\n")
+        return "", notLoggedIn
+    }
+    cid, err := bitswapPutFile(context.Background(), s.exchange, s.bstore, inputFile)
+    if err != nil {
+        return "", err
+    }
+    return cid.String(), nil
+}
+
+func (s *P2PService) GetFile(cid string, outputFile string) (string, error) {
+    if s.username == nil || s.exchange == nil {
+        log.Printf("Attempted to put file when not logged in\n")
+        return "", notLoggedIn
+    }
+    err := bitswapGetFile(context.Background(), s.exchange, s.bstore, cid, outputFile)
+    if err != nil {
+        return "", err
+    }
     return "success", nil
 }
