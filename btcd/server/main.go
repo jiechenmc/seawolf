@@ -5,39 +5,71 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
+	"seawolf/coin/api"
 
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/rpcclient"
-	"github.com/davecgh/go-spew/spew"
 )
 
 // -> Admin
 // createwallet <name> <passphrase>
 
-// Note to self
-//
-// -> Money
-// getbalance
-// listunspent
-// listreceivedbyaddress
-// sendtoaddress <addr> <amt>
-//
-// --> Transactions are processed when blocks are mined! <--
-
-// -> Logistics
-// getblockchaininfo
-// getaccountaddress <account>
-// gettransaction <txid>
-// getrawmempool <- mempool shows pending transactions
-
 // current addresses for testing:
 // SQvC2vyTrCtZnEoqhRMJozK3k2ovauhCEt
 // SV3AKDppayuuBVADVSbiAs6Nxgr7HMmfw6
+// Si9teS1ayrGzhynLCYGaRA73wnuGgGbBq7
 // seed:
 // 6779ea5e457d009b17b842510c755d89d781cb56507d05ae3c9efec062567b26
+
+type App struct {
+	rpcClient *rpcclient.Client
+}
+
+func (app *App) balanceHandler(w http.ResponseWriter, r *http.Request) {
+	balance, err := api.GetBalance(app.rpcClient)
+	if err != nil {
+		log.Fatalf(err.Error())
+	}
+	fmt.Fprintf(w, "%v", balance)
+}
+
+type RequestData struct {
+	Address    string `json:"address"`
+	Amount     int    `json:"amount"`
+	Passphrase string `json:"passphrase"`
+}
+
+func (app *App) transferHandler(w http.ResponseWriter, r *http.Request) {
+
+	// Decode the JSON body into the struct
+	var data RequestData
+	err := json.NewDecoder(r.Body).Decode(&data)
+	if err != nil {
+		http.Error(w, "Bad request: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	// Process the data (here, we simply print it)
+	fmt.Printf("Received data: %+v\n", data)
+
+	txid, err := api.SendToAddress(app.rpcClient, data.Address, float64(data.Amount), data.Passphrase)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Header().Set("Content-Type", "application/json")
+		response := map[string]any{"status": "error", "message": err.Error(), "txid": txid}
+		json.NewEncoder(w).Encode(response)
+	} else {
+		w.WriteHeader(http.StatusOK)
+		w.Header().Set("Content-Type", "application/json")
+		response := map[string]any{"status": "success", "message": "Transaction Received", "txid": txid}
+		json.NewEncoder(w).Encode(response)
+	}
+}
 
 func main() {
 	// Only override the handlers for notifications you care about.
@@ -48,6 +80,9 @@ func main() {
 		OnAccountBalance: func(account string, balance btcutil.Amount, confirmed bool) {
 			log.Printf("New balance for account %s: %v", account,
 				balance)
+		},
+		OnWalletLockState: func(locked bool) {
+			log.Printf("%v", locked)
 		},
 	}
 
@@ -64,33 +99,25 @@ func main() {
 		Pass:         "rpcpass",
 		Certificates: certs,
 	}
+
 	client, err := rpcclient.New(connCfg, &ntfnHandlers)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	// Get the list of unspent transaction outputs (utxos) that the
-	// connected wallet has at least one private key for.
-	unspent, err := client.ListUnspent()
+	app := &App{
+		rpcClient: client,
+	}
+
+	http.HandleFunc("/balance", app.balanceHandler)
+	http.HandleFunc("/transfer", app.transferHandler)
+
+	fmt.Println("Server is listening on port 8080...")
+	err = http.ListenAndServe(":8080", nil) // Start the HTTP server on port 8080
+
 	if err != nil {
-		log.Fatal(err)
-	}
-	log.Printf("Num unspent outputs (utxos): %d", len(unspent))
-	if len(unspent) > 0 {
-		log.Printf("First utxo:\n%v", spew.Sdump(unspent[0]))
+		fmt.Println("Error starting server:", err)
 	}
 
-	// For this example gracefully shutdown the client after 10 seconds.
-	// Ordinarily when to shutdown the client is highly application
-	// specific.
-	// log.Println("Client shutdown in 10 seconds...")
-	// time.AfterFunc(time.Second*10, func() {
-	// 	log.Println("Client shutting down...")
-	// 	client.Shutdown()
-	// 	log.Println("Client shutdown complete.")
-	// })
-
-	// Wait until the client either shuts down gracefully (or the user
-	// terminates the process with Ctrl+C).
-	client.WaitForShutdown()
+	defer client.Shutdown()
 }
