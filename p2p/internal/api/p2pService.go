@@ -6,6 +6,7 @@ import (
     "context"
     "github.com/libp2p/go-libp2p/core/host"
     "github.com/ipfs/boxo/bitswap"
+    "github.com/libp2p/go-libp2p/core/routing"
     dht "github.com/libp2p/go-libp2p-kad-dht"
     blockstore "github.com/ipfs/boxo/blockstore"
 
@@ -39,6 +40,40 @@ func (s *P2PService) GetPeers() error {
 
     return nil
 }
+
+func (s *P2PService) GetValue(key string) (string, error) {
+    if s.username == nil || s.kadDHT == nil {
+        return "", notLoggedIn
+    }
+    scopedKey := "/orcanet/" + key
+    value, err := s.kadDHT.GetValue(context.Background(), scopedKey)
+    if err != nil {
+        log.Printf("Failed to get value for key %v. %v", scopedKey, err)
+        if err == routing.ErrNotFound {
+            return "", keyNotFound
+        }
+        return "", internalError
+    }
+    return string(value), nil
+}
+
+func (s *P2PService) PutValue(key string, value string) (string, error) {
+    if s.username == nil || s.kadDHT == nil {
+        return "", notLoggedIn
+    }
+    scopedKey := "/orcanet/" + key
+    err := s.kadDHT.PutValue(context.Background(), scopedKey, []byte(value))
+    if err != nil {
+        log.Printf("Failed to put value for key %v. %v", scopedKey, err)
+        if err == routing.ErrNotFound {
+            return "", keyNotFound
+        }
+        return "", internalError
+    }
+    return "success", nil
+}
+
+
 func (s *P2PService) Login(username string, password string) (string, error) {
     if s.p2pHost != nil || s.username != nil {
         return "", alreadyLoggedIn

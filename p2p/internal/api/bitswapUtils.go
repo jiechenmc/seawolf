@@ -153,6 +153,7 @@ func bitswapPutFile(ctx context.Context, exchange *bitswap.Bitswap, bstore *bloc
     var nextNodes []dag.ProtoNode
 
     layerIdx := 0
+    totalBytes := 0
 
     //Read the file chunk by chunk and create parent nodes when neccessary
     for layerIdx == 0 {
@@ -185,25 +186,32 @@ func bitswapPutFile(ctx context.Context, exchange *bitswap.Bitswap, bstore *bloc
             currNodes[currNodeCount] = dag.NodeWithData(buffer).Copy()
             currNodeCount ++
         }
+        totalBytes += bytesRead
         bytesRead = 0
 
         //Construct a parent node and push it to the next layer
-        if currNodeCount == dagMaxChildren || layerIdx != 0 {
+        if currNodeCount != 0 && (currNodeCount == dagMaxChildren || layerIdx != 0) {
             //Do not create a parent if the file has only one chunk
-            if currNodeCount == 1 {
+            if len(nextNodes) == 0 && currNodeCount == 1 {
                 currNodes = currNodes[:1]
                 break
+            } else {
+                nextNodes = append(nextNodes, *dag.NodeWithData([]byte{}))
+                for i := 0; i < currNodeCount; i ++ {
+                    nextNodes[len(nextNodes) - 1].AddNodeLink(fmt.Sprintf("child-0-%d-%d", len(nextNodes) - 1, i), currNodes[i])
+                }
+                err = bufferedDAG.AddMany(ctx, currNodes[:currNodeCount])
+                if err != nil {
+                    log.Printf("Failed to add nodes to DAG. %v\n", err)
+                    return cid.Cid{}, internalError
+                }
+                err = bufferedDAG.Commit()
+                if err != nil {
+                    log.Printf("Failed to commit nodes to DAG. %v\n", err)
+                    return cid.Cid{}, internalError
+                }
+                currNodeCount = 0;
             }
-            nextNodes = append(nextNodes, *dag.NodeWithData([]byte{}))
-            for i := 0; i < currNodeCount; i ++ {
-                nextNodes[len(nextNodes) - 1].AddNodeLink(fmt.Sprintf("child-%d-%d-%d", layerIdx, len(nextNodes) - 1, i), currNodes[i])
-            }
-            err = bufferedDAG.AddMany(ctx, currNodes[:currNodeCount])
-            if err != nil {
-                log.Printf("Failed to add nodes to DAG. %v\n", err)
-                return cid.Cid{}, internalError
-            }
-            currNodeCount = 0;
         }
     }
 
@@ -212,8 +220,7 @@ func bitswapPutFile(ctx context.Context, exchange *bitswap.Bitswap, bstore *bloc
         currNodes = protoNodesToIPLDNodes(nextNodes)
     }
     for len(currNodes) != 1 {
-        nextNodes = make([]dag.ProtoNode, (len(currNodes) + dagMaxChildren + 1) / dagMaxChildren)
-
+        nextNodes = make([]dag.ProtoNode, (len(currNodes) + dagMaxChildren - 1) / dagMaxChildren)
         currNodesIdx := 0
         for i := 0; i < len(nextNodes); i ++ {
             nextNodes[i] = *dag.NodeWithData([]byte{})
@@ -228,6 +235,11 @@ func bitswapPutFile(ctx context.Context, exchange *bitswap.Bitswap, bstore *bloc
         err = bufferedDAG.AddMany(ctx, currNodes)
         if err != nil {
             log.Printf("Failed to add nodes to DAG. %v\n", err)
+            return cid.Cid{}, internalError
+        }
+        err = bufferedDAG.Commit()
+        if err != nil {
+            log.Printf("Failed to commit nodes to DAG. %v\n", err)
             return cid.Cid{}, internalError
         }
         currNodes = protoNodesToIPLDNodes(nextNodes)
@@ -246,7 +258,7 @@ func bitswapPutFile(ctx context.Context, exchange *bitswap.Bitswap, bstore *bloc
         return cid.Cid{}, internalError
     }
 
-    log.Printf("Successfully constructed and pushed Merkle DAG with root CID %v\n", currNodes[0].Cid())
+    log.Printf("Successfully constructed and pushed Merkle DAG with root CID %v. Total bytes: %v\n", currNodes[0].Cid(), totalBytes)
 
     return currNodes[0].Cid(), nil
 }
