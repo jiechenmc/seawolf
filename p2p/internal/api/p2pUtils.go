@@ -79,9 +79,18 @@ func p2pMakeReservation(ctx context.Context, node host.Host) error {
         log.Printf("Failed to make reservation on relay: %v", err)
         return internalError
     }
-    log.Printf("Reserved slot on relay: %v\n", reservation)
 
-    log.Printf("Successfully reserved slot on relay node\n")
+    log.Printf("Reserved slot on relay: %v\n", reservation.Addrs)
+    //Advertise relayed address
+    relayedMultiaddrs := make([]multiaddr.Multiaddr, len(reservation.Addrs))
+    for i, relayAddr := range reservation.Addrs {
+        relayedMultiaddrs[i] = relayAddr.Encapsulate(multiaddr.StringCast("/p2p-circuit/p2p/" + node.ID().String()))
+    }
+    log.Println("Relayed Addresses: ", relayedMultiaddrs)
+
+    // Add the relayed address to the host's multiaddresses
+    node.Peerstore().AddAddrs(node.ID(), relayedMultiaddrs, peerstore.PermanentAddrTTL)
+
     return nil
 }
 
