@@ -17,6 +17,12 @@ import (
 
 /* CODE FROM TA TUTORIAL */
 
+type PeerStatus struct {
+    PeerID peer.ID                    `json:"peerID,omitempty"`
+    Addresses []multiaddr.Multiaddr   `json:"addresses,omitempty"`
+    IsConnected bool                  `json:"isConnected,omitempty"`
+}
+
 type CustomValidator struct{}
 
 func (v *CustomValidator) Validate(key string, value []byte) error {
@@ -80,7 +86,7 @@ func p2pMakeReservation(ctx context.Context, node host.Host) error {
         return internalError
     }
 
-    log.Printf("Reserved slot on relay: %v\n", reservation.Addrs)
+    log.Printf("Reserved slot on relay: %v\n", reservation)
     //Advertise relayed address
     relayedMultiaddrs := make([]multiaddr.Multiaddr, len(reservation.Addrs))
     for i, relayAddr := range reservation.Addrs {
@@ -90,13 +96,15 @@ func p2pMakeReservation(ctx context.Context, node host.Host) error {
 
     // Add the relayed address to the host's multiaddresses
     node.Peerstore().AddAddrs(node.ID(), relayedMultiaddrs, peerstore.PermanentAddrTTL)
+    log.Println("My Addresses: ", node.Addrs())
+    log.Println("My Addresses: ", node.Network().ListenAddresses())
 
     return nil
 }
 
 func p2pCreateDHT(ctx context.Context, h host.Host) (*dht.IpfsDHT, error) {
     // Set up the DHT instance
-    kadDHT, err := dht.New(ctx, h, dht.Mode(dht.ModeServer))
+    kadDHT, err := dht.New(ctx, h, dht.Mode(dht.ModeClient))
     if err != nil {
         log.Printf("Failed to create DHT instance. %v", err)
         return nil, internalError
@@ -173,8 +181,6 @@ func p2pPrintKnownPeers(host host.Host) {
     }
 }
 
-
-
 func p2pPrintRoutingTable(dhtService *dht.IpfsDHT) {
     // Retrieve and print the routing table
     peers := dhtService.RoutingTable().ListPeers()
@@ -198,12 +204,14 @@ func p2pConnectToPeerUsingRelay(ctx context.Context, node host.Host, targetPeerI
 		log.Println("Failed to get relayed AddrInfo: %w", err)
         return internalError
 	}
+
 	// Connect to the peer through the relay
 	err = node.Connect(ctx, *relayedAddrInfo)
 	if err != nil {
 		log.Println("Failed to connect to peer through relay: %w", err)
         return internalError
 	}
+    node.Peerstore().AddAddrs(relayedAddrInfo.ID, relayedAddrInfo.Addrs, peerstore.PermanentAddrTTL)
 
     log.Printf("Connected to peer via relay: %s\n", targetPeerID)
 	return nil
@@ -217,5 +225,39 @@ func p2pDeleteHost(node host.Host) error {
     return err
 }
 
+func p2pIsConnected(host host.Host, peerID peer.ID) bool {
+    for _, p := range host.Network().Peers() {
+        if p == peerID {
+            return true
+        }
+    }
+    return false
+}
 
-// host.Peerstore().AddAddrs(peerAddrInfo.ID, peerAddrInfo.Addrs, peerstore.PermanentAddrTTL)
+func p2pGetPeers(host host.Host) []PeerStatus {
+    peers := host.Peerstore().Peers()
+    var peerStatuses []PeerStatus
+    for _, p := range peers {
+        if p == host.ID() {
+            continue
+        }
+        connected := p2pIsConnected(host, p)
+        addrs := host.Peerstore().Addrs(p)
+        peerStatuses = append(peerStatuses, PeerStatus{ p, addrs,  connected })
+    }
+    return peerStatuses
+}
+
+func p2pFindPeer(ctx context.Context, kadDHT *dht.IpfsDHT, peerIDStr string) (PeerStatus, error) {
+    peerID, err := peer.Decode(peerIDStr)
+    if err != nil {
+        log.Printf("Failed to decode peer ID string '%v'. %v\n", peerIDStr, err)
+        return PeerStatus{}, invalidParams
+    }
+    addrInfo, err := kadDHT.FindPeer(ctx, peerID)
+    if err != nil {
+        log.Printf("Failed to find peer. %v\n", err)
+        return PeerStatus{}, peerNotFound
+    }
+    return PeerStatus{ addrInfo.ID, addrInfo.Addrs, false }, nil
+}
