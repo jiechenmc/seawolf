@@ -7,6 +7,7 @@ import (
     "log"
     "context"
     "github.com/libp2p/go-libp2p/core/host"
+    "github.com/libp2p/go-libp2p/core/peer"
     "github.com/ipfs/boxo/bitswap"
     "github.com/ipfs/boxo/bitswap/network"
     "github.com/ipfs/boxo/blockservice"
@@ -263,4 +264,19 @@ func bitswapPutFile(ctx context.Context, exchange *bitswap.Bitswap, bstore *bloc
     return currNodes[0].Cid(), nil
 }
 
+func bitswapFindProviders(ctx context.Context, kadDHT *dht.IpfsDHT, requestCid string) ([]peer.AddrInfo, error) {
+    cid, err := cid.Decode(requestCid)
+    if err != nil {
+        log.Printf("Failed to decode cid %v. %v", requestCid, err)
+        return []peer.AddrInfo{}, invalidParams
+    }
+    peerChan := kadDHT.FindProvidersAsync(ctx, cid, 10)
+    var providers []peer.AddrInfo
+    for p := range peerChan {
+	    log.Printf("Found provider: %s\n", p.ID)
+        providers = append(providers, p)
+		// You can connect to the peer and request the block using Bitswap
+	}
 
+    return providers, nil
+}

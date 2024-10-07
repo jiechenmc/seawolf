@@ -1,10 +1,12 @@
 package api
 
 import (
+    "time"
     "log"
     "errors"
     "context"
     "github.com/libp2p/go-libp2p/core/host"
+    "github.com/libp2p/go-libp2p/core/peer"
     "github.com/ipfs/boxo/bitswap"
     "github.com/libp2p/go-libp2p/core/routing"
     dht "github.com/libp2p/go-libp2p-kad-dht"
@@ -106,7 +108,6 @@ func (s *P2PService) PutValue(key string, value string) (string, error) {
     }
     return "success", nil
 }
-
 
 func (s *P2PService) Login( username string, password string) (string, error) {
     if s.p2pHost != nil || s.username != nil {
@@ -275,4 +276,23 @@ func (s *P2PService) GetFile(cid string, outputFile string) (string, error) {
         return "", err
     }
     return "success", nil
+}
+
+func (s *P2PService) FindProviders(cid string) ([]peer.AddrInfo, error) {
+    if s.username == nil || s.exchange == nil {
+        log.Printf("Attempted to get provider when not logged in\n")
+        return nil, notLoggedIn
+    }
+    ctx := context.Background()
+	// Query the DHT to find the providers of the block
+	ctxTimeout, cancel := context.WithTimeout(ctx, time.Second*10)
+	defer cancel()
+
+    providers, err := bitswapFindProviders(ctxTimeout, s.kadDHT, cid)
+    if err != nil {
+        return nil, err
+    }
+
+    return providers, nil
+
 }
