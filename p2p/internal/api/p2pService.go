@@ -25,18 +25,18 @@ type P2PService struct {
     bstore *blockstore.Blockstore
 }
 
-func (s *P2PService) ConnectToPeer(ctx context.Context, peerID string) (string, error) {
+func (s *P2PService) ConnectToPeer(peerID string) (string, error) {
     if s.p2pHost == nil || s.username == nil {
         return "", notLoggedIn
     }
-    err := p2pConnectToPeerUsingRelay(ctx, *s.p2pHost, peerID)
+    err := p2pConnectToPeerUsingRelay(context.Background(), *s.p2pHost, peerID)
     if err != nil {
         return "", err
     }
     return "success", nil
 }
 
-func (s *P2PService) FindPeer(ctx context.Context, peerID string) (PeerStatus, error) {
+func (s *P2PService) FindPeer(peerID string) (PeerStatus, error) {
     if s.p2pHost == nil || s.username == nil {
         return PeerStatus{}, notLoggedIn
     }
@@ -52,7 +52,7 @@ func (s *P2PService) FindPeer(ctx context.Context, peerID string) (PeerStatus, e
     }
 
     //Find peer
-    peer, err := p2pFindPeer(ctx, s.kadDHT, peerID)
+    peer, err := p2pFindPeer(context.Background(), s.kadDHT, peerID)
     if err != nil {
         return PeerStatus{}, err
     }
@@ -61,7 +61,7 @@ func (s *P2PService) FindPeer(ctx context.Context, peerID string) (PeerStatus, e
 
 
 
-func (s *P2PService) GetPeers(ctx context.Context) ([]PeerStatus, error) {
+func (s *P2PService) GetPeers() ([]PeerStatus, error) {
     if s.p2pHost == nil || s.username == nil {
         return nil, notLoggedIn
     }
@@ -75,12 +75,12 @@ func (s *P2PService) GetPeers(ctx context.Context) ([]PeerStatus, error) {
     return peers, nil
 }
 
-func (s *P2PService) GetValue(ctx context.Context, key string) (string, error) {
+func (s *P2PService) GetValue(key string) (string, error) {
     if s.username == nil || s.kadDHT == nil {
         return "", notLoggedIn
     }
     scopedKey := "/orcanet/" + key
-    value, err := s.kadDHT.GetValue(ctx, scopedKey)
+    value, err := s.kadDHT.GetValue(context.Background(), scopedKey)
     if err != nil {
         log.Printf("Failed to get value for key %v. %v", scopedKey, err)
         if err == routing.ErrNotFound {
@@ -91,12 +91,12 @@ func (s *P2PService) GetValue(ctx context.Context, key string) (string, error) {
     return string(value), nil
 }
 
-func (s *P2PService) PutValue(ctx context.Context, key string, value string) (string, error) {
+func (s *P2PService) PutValue(key string, value string) (string, error) {
     if s.username == nil || s.kadDHT == nil {
         return "", notLoggedIn
     }
     scopedKey := "/orcanet/" + key
-    err := s.kadDHT.PutValue(ctx, scopedKey, []byte(value))
+    err := s.kadDHT.PutValue(context.Background(), scopedKey, []byte(value))
     if err != nil {
         log.Printf("Failed to put value for key %v. %v", scopedKey, err)
         if err == routing.ErrNotFound {
@@ -108,7 +108,7 @@ func (s *P2PService) PutValue(ctx context.Context, key string, value string) (st
 }
 
 
-func (s *P2PService) Login(ctx context.Context, username string, password string) (string, error) {
+func (s *P2PService) Login( username string, password string) (string, error) {
     if s.p2pHost != nil || s.username != nil {
         return "", alreadyLoggedIn
     }
@@ -141,6 +141,7 @@ func (s *P2PService) Login(ctx context.Context, username string, password string
 
     privateKey, err := cipherDecryptPrivateKey(passwordBytes, privateKeyCiphertext, privateKeyIV, privateKeySalt)
 
+    ctx := context.Background()
     //Create libp2p host with private key
     newHost, err := p2pCreateHost(ctx, &privateKey)
     if err != nil {
@@ -175,7 +176,7 @@ func (s *P2PService) Login(ctx context.Context, username string, password string
     return (*s.p2pHost).ID().String(), nil
 }
 
-func (s *P2PService) Register(ctx context.Context, username string, password string, seed string) (string, error) {
+func (s *P2PService) Register(username string, password string, seed string) (string, error) {
     //Optional seed parameter for private key generation
     var seedBytes []byte = nil
     if seed != "" {
@@ -219,7 +220,7 @@ func (s *P2PService) Register(ctx context.Context, username string, password str
     return "success", nil
 }
 
-func (s *P2PService) AddWallet(ctx context.Context, password string, rpcUsername string, rpcPassword string) (string, error) {
+func (s *P2PService) AddWallet(password string, rpcUsername string, rpcPassword string) (string, error) {
     if s.username == nil {
         log.Printf("Attempted to add wallet when not logged in\n")
         return "", notLoggedIn
@@ -252,24 +253,24 @@ func (s *P2PService) AddWallet(ctx context.Context, password string, rpcUsername
     //Query local btcwallet daemon to ensure rpcUsername and rpcPassword are valid
 }
 
-func (s *P2PService) PutFile(ctx context.Context, inputFile string) (string, error) {
+func (s *P2PService) PutFile(inputFile string) (string, error) {
     if s.username == nil || s.exchange == nil {
         log.Printf("Attempted to put file when not logged in\n")
         return "", notLoggedIn
     }
-    cid, err := bitswapPutFile(ctx, s.exchange, s.bstore, inputFile)
+    cid, err := bitswapPutFile(context.Background(), s.exchange, s.bstore, inputFile)
     if err != nil {
         return "", err
     }
     return cid.String(), nil
 }
 
-func (s *P2PService) GetFile(ctx context.Context, cid string, outputFile string) (string, error) {
+func (s *P2PService) GetFile(cid string, outputFile string) (string, error) {
     if s.username == nil || s.exchange == nil {
         log.Printf("Attempted to put file when not logged in\n")
         return "", notLoggedIn
     }
-    err := bitswapGetFile(ctx, s.exchange, s.bstore, cid, outputFile)
+    err := bitswapGetFile(context.Background(), s.exchange, s.bstore, cid, outputFile)
     if err != nil {
         return "", err
     }
