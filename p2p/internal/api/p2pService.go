@@ -177,7 +177,7 @@ func (s *P2PService) Login( username string, password string) (string, error) {
     log.Printf("Successfully logged in user '%v'\n", *s.username)
 
     s.messages = make(chan string, 128)
-    go p2pSetupStreamHandler(*s.p2pHost, s.messages)
+    p2pSetupStreamHandlers(*s.p2pHost, s.messages)
     return (*s.p2pHost).ID().String(), nil
 }
 

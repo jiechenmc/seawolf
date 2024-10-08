@@ -7,6 +7,7 @@ import (
     "strings"
     "context"
     "log"
+    "encoding/json"
     "github.com/libp2p/go-libp2p/core/network"
     "github.com/libp2p/go-libp2p"
     "github.com/libp2p/go-libp2p/core/host"
@@ -195,30 +196,30 @@ func p2pPrintRoutingTable(dhtService *dht.IpfsDHT) {
 }
 
 func p2pConnectToPeerUsingRelay(ctx context.Context, node host.Host, targetPeerID string) error {
-	targetPeerID = strings.TrimSpace(targetPeerID)
-	relayAddr, err := multiaddr.NewMultiaddr(relayNodeAddr)
-	if err != nil {
-		log.Printf("Failed to create relay multiaddr: %v", err)
+    targetPeerID = strings.TrimSpace(targetPeerID)
+    relayAddr, err := multiaddr.NewMultiaddr(relayNodeAddr)
+    if err != nil {
+        log.Printf("Failed to create relay multiaddr: %v", err)
         return internalError
-	}
-	peerMultiaddr := relayAddr.Encapsulate(multiaddr.StringCast("/p2p-circuit/p2p/" + targetPeerID))
+    }
+    peerMultiaddr := relayAddr.Encapsulate(multiaddr.StringCast("/p2p-circuit/p2p/" + targetPeerID))
 
-	relayedAddrInfo, err := peer.AddrInfoFromP2pAddr(peerMultiaddr)
-	if err != nil {
-		log.Println("Failed to get relayed AddrInfo: %w", err)
+    relayedAddrInfo, err := peer.AddrInfoFromP2pAddr(peerMultiaddr)
+    if err != nil {
+        log.Println("Failed to get relayed AddrInfo: %w", err)
         return internalError
-	}
+    }
 
-	// Connect to the peer through the relay
-	err = node.Connect(ctx, *relayedAddrInfo)
-	if err != nil {
-		log.Println("Failed to connect to peer through relay: %w", err)
+    // Connect to the peer through the relay
+    err = node.Connect(ctx, *relayedAddrInfo)
+    if err != nil {
+        log.Println("Failed to connect to peer through relay: %w", err)
         return internalError
-	}
+    }
     node.Peerstore().AddAddrs(relayedAddrInfo.ID, relayedAddrInfo.Addrs, peerstore.PermanentAddrTTL)
 
     log.Printf("Connected to peer via relay: %s\n", targetPeerID)
-	return nil
+    return nil
 }
 
 func p2pDeleteHost(node host.Host) error {
@@ -266,15 +267,51 @@ func p2pFindPeer(ctx context.Context, kadDHT *dht.IpfsDHT, peerIDStr string) (Pe
     return PeerStatus{ addrInfo.ID, addrInfo.Addrs, false }, nil
 }
 
-func p2pSetupStreamHandler(node host.Host, messages chan string) {
-    node.SetStreamHandler("/orcanet/p2p", func(s network.Stream) {
+func p2pSetupStreamHandlers(node host.Host, messages chan string) {
+    go node.SetStreamHandler("/orcanet/p2p/seawolf/messages", func(s network.Stream) {
         defer s.Close()
         buf := bufio.NewReader(s)
         message, err := buf.ReadString('\n')
-        if err != nil && err != io.EOF {
-            log.Printf("Error reading from stream: %v", err)
+        if err != nil {
+            if err != io.EOF {
+                log.Printf("Error reading from stream: %v", err)
+            }
+        } else {
+            message = message[:len(message) - 1] //Remove new line
         }
-        messages <- message
+        messages <- message[:len(message) - 1]
+    })
+
+    relayInfo, _ := peer.AddrInfoFromString(relayNodeAddr)
+    go node.SetStreamHandler("/orcanet/p2p", func(s network.Stream) {
+        defer s.Close()
+        ctx := context.Background()
+
+        buf := bufio.NewReader(s)
+        peerAddr, err := buf.ReadString('\n')
+        if err != nil {
+            if err != io.EOF {
+                fmt.Printf("error reading from stream: %v", err)
+            }
+        }
+        peerAddr = strings.TrimSpace(peerAddr)
+        var data map[string]interface{}
+        err = json.Unmarshal([]byte(peerAddr), &data)
+        if err != nil {
+            fmt.Printf("error unmarshaling JSON: %v", err)
+        }
+        if knownPeers, ok := data["known_peers"].([]interface{}); ok {
+            for _, peer := range knownPeers {
+                fmt.Println("Peer:")
+                if peerMap, ok := peer.(map[string]interface{}); ok {
+                    if peerID, ok := peerMap["peer_id"].(string); ok {
+                        if string(peerID) != string(relayInfo.ID) {
+                            p2pConnectToPeerUsingRelay(ctx, node, peerID)
+                        }
+                    }
+                }
+            }
+        }
     })
 }
 
@@ -285,12 +322,12 @@ func p2pSendMessage(ctx context.Context, node host.Host, peerIDStr string, messa
         return invalidParams
     }
 
-    stream, err := node.NewStream(network.WithAllowLimitedConn(ctx, "/orcanet/p2p"), peerID, "/orcanet/p2p")
-	if err != nil {
-		log.Printf("Failed to open stream after multiple attempts. %v", err)
+    stream, err := node.NewStream(network.WithAllowLimitedConn(ctx, "/orcanet/p2p/seawolf/messages"), peerID, "/orcanet/p2p/seawolf/messages")
+    if err != nil {
+        log.Printf("Failed to open stream after multiple attempts. %v", err)
         return internalError
-	}
-	defer stream.Close()
+    }
+    defer stream.Close()
 
     writer := bufio.NewWriter(stream)
     fmt.Fprintln(writer, message)
