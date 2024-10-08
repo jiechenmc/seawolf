@@ -25,6 +25,7 @@ type P2PService struct {
     kadDHT *dht.IpfsDHT
     exchange *bitswap.Bitswap
     bstore *blockstore.Blockstore
+    messages chan string
 }
 
 func (s *P2PService) ConnectToPeer(peerID string) (string, error) {
@@ -174,6 +175,9 @@ func (s *P2PService) Login( username string, password string) (string, error) {
 
     s.username = &username
     log.Printf("Successfully logged in user '%v'\n", *s.username)
+
+    s.messages = make(chan string, 128)
+    go p2pSetupStreamHandler(*s.p2pHost, s.messages)
     return (*s.p2pHost).ID().String(), nil
 }
 
@@ -295,4 +299,33 @@ func (s *P2PService) FindProviders(cid string) ([]peer.AddrInfo, error) {
 
     return providers, nil
 
+}
+
+func (s *P2PService) GetMessage() (string, error) {
+    if s.username == nil {
+        log.Printf("Attempted to read messages when not logged in\n")
+        return "", notLoggedIn
+    }
+    select {
+        case message := <-s.messages:
+            log.Println("Received message:", message)
+            return message, nil
+        default:
+            return "", nil
+    }
+}
+
+func (s *P2PService) SendMessage(peerID string, message string) (string, error) {
+    if s.username == nil {
+        log.Printf("Attempted to send a message when not logged in\n")
+        return "", notLoggedIn
+    }
+    ctx := context.Background()
+
+    err := p2pSendMessage(ctx, *s.p2pHost, peerID, message)
+    if err != nil {
+        return "", err
+    }
+
+    return "success", nil
 }
