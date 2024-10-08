@@ -308,7 +308,6 @@ func (s *P2PService) GetMessage() (string, error) {
     }
     select {
         case message := <-s.messages:
-            log.Println("Received message:", message)
             return message, nil
         default:
             return "", nil

@@ -268,20 +268,23 @@ func p2pFindPeer(ctx context.Context, kadDHT *dht.IpfsDHT, peerIDStr string) (Pe
 }
 
 func p2pSetupStreamHandlers(node host.Host, messages chan string) {
+    //Handler for /orcanet/p2p/seawolf/messages protocol for simple message sending
     go node.SetStreamHandler("/orcanet/p2p/seawolf/messages", func(s network.Stream) {
         defer s.Close()
         buf := bufio.NewReader(s)
         message, err := buf.ReadString('\n')
         if err != nil {
             if err != io.EOF {
-                log.Printf("Error reading from stream: %v", err)
+                log.Printf("/orcanet/p2p/seawolf/messages: Error reading from stream: %v\n", err)
+                return
             }
         } else {
             message = message[:len(message) - 1] //Remove new line
         }
-        messages <- message[:len(message) - 1]
+        log.Printf("/orcanet/p2p/seawolf/messages: Got new message: %v\n", message)
+        messages <- message
     })
-
+    //Handler for /orcanet/p2p for peer discovery
     relayInfo, _ := peer.AddrInfoFromString(relayNodeAddr)
     go node.SetStreamHandler("/orcanet/p2p", func(s network.Stream) {
         defer s.Close()
@@ -291,21 +294,23 @@ func p2pSetupStreamHandlers(node host.Host, messages chan string) {
         peerAddr, err := buf.ReadString('\n')
         if err != nil {
             if err != io.EOF {
-                fmt.Printf("error reading from stream: %v", err)
+                log.Printf("/orcanet/p2p: error reading from stream: %v\n", err)
+                return
             }
         }
         peerAddr = strings.TrimSpace(peerAddr)
         var data map[string]interface{}
         err = json.Unmarshal([]byte(peerAddr), &data)
         if err != nil {
-            fmt.Printf("error unmarshaling JSON: %v", err)
+            log.Printf("/orcanet/p2p: error unmarshaling JSON: %v\n", err)
+            return
         }
         if knownPeers, ok := data["known_peers"].([]interface{}); ok {
             for _, peer := range knownPeers {
-                fmt.Println("Peer:")
                 if peerMap, ok := peer.(map[string]interface{}); ok {
                     if peerID, ok := peerMap["peer_id"].(string); ok {
                         if string(peerID) != string(relayInfo.ID) {
+                            log.Println("/orcanet/p2p: Found new peer %v\n", peerID)
                             p2pConnectToPeerUsingRelay(ctx, node, peerID)
                         }
                     }
