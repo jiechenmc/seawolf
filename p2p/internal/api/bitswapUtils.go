@@ -9,6 +9,7 @@ import (
     "context"
     "strings"
     "strconv"
+    "sync"
     "github.com/libp2p/go-libp2p/core/host"
     "github.com/libp2p/go-libp2p/core/peer"
     "github.com/ipfs/boxo/bitswap"
@@ -77,7 +78,30 @@ func bitswapGetFile(ctx context.Context, exchange *bitswap.Bitswap, bstore *bloc
     stack[0] = root
     stackPointer := 1
 
-    pbNode := pb.PBNode{}
+    //Chan used for async writes to disk
+    dataNodeChan := make(chan ipld.Node, 128)
+    errChan := make(chan error, 1)
+    var wg sync.WaitGroup
+    wg.Add(1)
+    go func() {
+        defer wg.Done()
+        pbNode := pb.PBNode{}
+        for node := range dataNodeChan {
+            err := pbNode.Unmarshal(node.RawData())
+            if err != nil {
+                log.Printf("Failed to unmarshal raw data. %v", err)
+                errChan <- internalError
+            }
+            //We've reached a data node/block
+            _, err = file.Write(pbNode.Data)
+            if err != nil {
+                log.Printf("Error writing to file: %v. %v\n", tmpOutputFile, err)
+                errChan <- internalError
+            }
+        }
+        errChan <- nil
+    }()
+
     //Iterate the Merkle DAG in depth first search fashion
     //TODO: fetch all child nodes at once instead of one by one
     for stackPointer != 0 {
@@ -99,18 +123,7 @@ func bitswapGetFile(ctx context.Context, exchange *bitswap.Bitswap, bstore *bloc
             node := nodeOption.Node
             links := node.Links()
             if len(links) == 0 {
-                err = pbNode.Unmarshal(node.RawData())
-                if err != nil {
-                    log.Printf("Failed to unmarshal raw data. %v", err)
-                    return internalError
-                }
-                //We've reached a data node/block
-                _, err = file.Write(pbNode.Data)
-                if err != nil {
-                    log.Printf("Error writing to file: %v. %v\n", tmpOutputFile, err)
-                    file.Close()
-                    return internalError
-                }
+                dataNodeChan <- node
             } else {
                 //If we're in the layer before the data layer, we'll pop all child datablocks in next iteration
                 layerIdx, err := strconv.Atoi(strings.Split(links[0].Name, "-")[0])
@@ -130,6 +143,13 @@ func bitswapGetFile(ctx context.Context, exchange *bitswap.Bitswap, bstore *bloc
         }
         cancel()
     }
+    close(dataNodeChan)
+    //Wait until writing thread is done writing
+    wg.Wait()
+    err = <- errChan
+    if err != nil {
+        return err
+    }
     //Close temporary file and move it to final output file
     file.Close()
 
@@ -141,6 +161,7 @@ func bitswapGetFile(ctx context.Context, exchange *bitswap.Bitswap, bstore *bloc
 
     return nil
 }
+
 
 func protoNodesToIPLDNodes(protoNodes []dag.ProtoNode) []ipld.Node {
     ipldNodes := make([]ipld.Node, len(protoNodes))
