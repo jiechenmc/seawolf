@@ -1,11 +1,14 @@
 package api
 
 import (
+    "time"
     "os"
     "io"
     "fmt"
     "log"
     "context"
+    "strings"
+    "strconv"
     "github.com/libp2p/go-libp2p/core/host"
     "github.com/libp2p/go-libp2p/core/peer"
     "github.com/ipfs/boxo/bitswap"
@@ -33,7 +36,7 @@ func bitswapCreate(ctx context.Context, node host.Host, kadDHT *dht.IpfsDHT) (*b
     bstore := blockstore.NewBlockstore(ds)
 
     //Create a bitswap network
-    bsNetwork := network.NewFromIpfsHost(node, kadDHT)
+    bsNetwork := network.NewFromIpfsHost(node, kadDHT, network.Prefix("/orcanet/p2p/seawolf"))
 
     //Create and return bitswap instance
     exchange := bitswap.New(ctx, bsNetwork, bstore)
@@ -65,8 +68,12 @@ func bitswapGetFile(ctx context.Context, exchange *bitswap.Bitswap, bstore *bloc
         return internalError
     }
 
+    //Create new session
+    session := dag.NewSession(ctx, comboService)
+
     //Keep a stack of Cid()s to 'visit'
     stack := make([]cid.Cid, 1028)
+    nextPopCount := 1
     stack[0] = root
     stackPointer := 1
 
@@ -74,34 +81,54 @@ func bitswapGetFile(ctx context.Context, exchange *bitswap.Bitswap, bstore *bloc
     //Iterate the Merkle DAG in depth first search fashion
     //TODO: fetch all child nodes at once instead of one by one
     for stackPointer != 0 {
-        stackPointer --
-        node, err := comboService.Get(ctx, stack[stackPointer])
-        if err != nil {
-            log.Printf("Failed to fetch node in Merkle DAG. %v\n", err)
-            file.Close()
-            return internalError
-        }
-        links := node.Links()
-        if len(links) == 0 {
-            err = pbNode.Unmarshal(node.RawData())
+        ctxTimeout, cancel := context.WithTimeout(ctx, time.Second*10)
+        cids := stack[stackPointer - nextPopCount:stackPointer]
+        nodeChannel := session.GetMany(ctxTimeout, cids)
+        stackPointer -= nextPopCount
+        nextPopCount = 1
+        for nodeOption := range nodeChannel {
+            err = nodeOption.Err
             if err != nil {
-                log.Printf("Failed to unmarshal raw data. %v", err)
-                return internalError
-            }
-            //We've reached a data node/block
-            _, err = file.Write(pbNode.Data)
-            if err != nil {
-                log.Printf("Error writing to file: %v. %v\n", tmpOutputFile, err)
+                log.Printf("Failed to fetch node in Merkle DAG. %v\n", err)
                 file.Close()
+                if err == context.DeadlineExceeded {
+                    return timeoutError
+                }
                 return internalError
             }
-        } else {
-            //Push the link Cid()s onto the stack in reverse order
-            for i := len(links) - 1; i >= 0; i -- {
-                stack[stackPointer] = links[i].Cid
-                stackPointer ++
+            node := nodeOption.Node
+            links := node.Links()
+            if len(links) == 0 {
+                err = pbNode.Unmarshal(node.RawData())
+                if err != nil {
+                    log.Printf("Failed to unmarshal raw data. %v", err)
+                    return internalError
+                }
+                //We've reached a data node/block
+                _, err = file.Write(pbNode.Data)
+                if err != nil {
+                    log.Printf("Error writing to file: %v. %v\n", tmpOutputFile, err)
+                    file.Close()
+                    return internalError
+                }
+            } else {
+                //If we're in the layer before the data layer, we'll pop all child datablocks in next iteration
+                layerIdx, err := strconv.Atoi(strings.Split(links[0].Name, "-")[0])
+                if err != nil {
+                    log.Printf("Failed to parse link name. %v\n", err)
+                    return internalError
+                }
+                //Push the link Cid()s onto the stack in reverse order
+                for i := len(links) - 1; i >= 0; i -- {
+                    stack[stackPointer] = links[i].Cid
+                    stackPointer ++
+                }
+                if layerIdx == 1 {
+                    nextPopCount = len(links)
+                }
             }
         }
+        cancel()
     }
     //Close temporary file and move it to final output file
     file.Close()
@@ -199,7 +226,7 @@ func bitswapPutFile(ctx context.Context, exchange *bitswap.Bitswap, bstore *bloc
             } else {
                 nextNodes = append(nextNodes, *dag.NodeWithData([]byte{}))
                 for i := 0; i < currNodeCount; i ++ {
-                    nextNodes[len(nextNodes) - 1].AddNodeLink(fmt.Sprintf("child-0-%d-%d", len(nextNodes) - 1, i), currNodes[i])
+                    nextNodes[len(nextNodes) - 1].AddNodeLink(fmt.Sprintf("0-%d-%d", len(nextNodes) - 1, i), currNodes[i])
                 }
                 err = bufferedDAG.AddMany(ctx, currNodes[:currNodeCount])
                 if err != nil {
@@ -229,7 +256,7 @@ func bitswapPutFile(ctx context.Context, exchange *bitswap.Bitswap, bstore *bloc
                 if currNodesIdx == len(currNodes) {
                     break
                 }
-                nextNodes[i].AddNodeLink(fmt.Sprintf("child-%d-%d-%d", layerIdx, i, j), currNodes[currNodesIdx])
+                nextNodes[i].AddNodeLink(fmt.Sprintf("%d-%d-%d", layerIdx, i, j), currNodes[currNodesIdx])
                 currNodesIdx ++
             }
         }

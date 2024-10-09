@@ -2,6 +2,7 @@ package api
 
 import (
     "errors"
+    // "context"
 )
 
 var internalError = errors.New("Internal error")
@@ -12,3 +13,16 @@ var peerConnectionError = errors.New("Error: Failed to connect to peer")
 var invalidParams = errors.New("Error: Invalid parameter(s)")
 var keyNotFound = errors.New("Error: Failed to find key")
 var peerNotFound = errors.New("Error: Failed to find peer")
+var timeoutError = errors.New("Error: Timed out")
+
+/* TODO
+func mapError(err error) error {
+    switch (err) {
+        case context.DeadlineExceeded:
+            return timeoutError
+        case routing.ErrNotFound:
+            return keyNotFound
+        default:
+            return internalError
+    }
+}*/
