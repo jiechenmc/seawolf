@@ -7,8 +7,6 @@ import (
     "fmt"
     "log"
     "context"
-    "strings"
-    "strconv"
     "sync"
     "github.com/libp2p/go-libp2p/core/host"
     "github.com/libp2p/go-libp2p/core/peer"
@@ -72,10 +70,12 @@ func bitswapGetFile(ctx context.Context, exchange *bitswap.Bitswap, bstore *bloc
     //Create new session
     session := dag.NewSession(ctx, comboService)
 
-    //Keep a stack of Cid()s to 'visit'
-    stack := make([]cid.Cid, 1028)
-    nextPopCount := 1
-    stack[0] = root
+    //Keep a stack of node chans
+    stack := make([]<- chan *ipld.NodeOption, 256)
+    ctxCancelStack := make([] context.CancelFunc, 256)
+    ctxTimeout, cancel := context.WithTimeout(ctx, time.Second*10)
+    stack[0] = session.GetMany(ctxTimeout, []cid.Cid{root})
+    ctxCancelStack[0] = cancel
     stackPointer := 1
 
     //Chan used for async writes to disk
@@ -103,45 +103,33 @@ func bitswapGetFile(ctx context.Context, exchange *bitswap.Bitswap, bstore *bloc
     }()
 
     //Iterate the Merkle DAG in depth first search fashion
-    //TODO: fetch all child nodes at once instead of one by one
     for stackPointer != 0 {
-        ctxTimeout, cancel := context.WithTimeout(ctx, time.Second*10)
-        cids := stack[stackPointer - nextPopCount:stackPointer]
-        nodeChannel := session.GetMany(ctxTimeout, cids)
-        stackPointer -= nextPopCount
-        nextPopCount = 1
-        for nodeOption := range nodeChannel {
-            err = nodeOption.Err
-            if err != nil {
-                log.Printf("Failed to fetch node in Merkle DAG. %v\n", err)
-                file.Close()
-                if err == context.DeadlineExceeded {
-                    return timeoutError
-                }
-                return internalError
+        stackPointer --
+        nodeChannel := stack[stackPointer]
+        nodeOption := <- nodeChannel
+        ctxCancelStack[stackPointer]()
+        err = nodeOption.Err
+        if err != nil {
+            log.Printf("Failed to fetch node in Merkle DAG. %v\n", err)
+            file.Close()
+            if err == context.DeadlineExceeded {
+                return timeoutError
             }
-            node := nodeOption.Node
-            links := node.Links()
-            if len(links) == 0 {
-                dataNodeChan <- node
-            } else {
-                //If we're in the layer before the data layer, we'll pop all child datablocks in next iteration
-                layerIdx, err := strconv.Atoi(strings.Split(links[0].Name, "-")[0])
-                if err != nil {
-                    log.Printf("Failed to parse link name. %v\n", err)
-                    return internalError
-                }
-                //Push the link Cid()s onto the stack in reverse order
-                for i := len(links) - 1; i >= 0; i -- {
-                    stack[stackPointer] = links[i].Cid
-                    stackPointer ++
-                }
-                if layerIdx == 1 {
-                    nextPopCount = len(links)
-                }
+            return internalError
+        }
+        node := nodeOption.Node
+        links := node.Links()
+        if len(links) == 0 {
+            dataNodeChan <- node
+        } else {
+            //Push the link Cid()s onto the stack in reverse order
+            for i := len(links) - 1; i >= 0; i -- {
+                ctxTimeout, cancel := context.WithTimeout(ctx, time.Second*10)
+                stack[stackPointer] = session.GetMany(ctxTimeout, []cid.Cid{links[i].Cid})
+                ctxCancelStack[stackPointer] = cancel
+                stackPointer ++
             }
         }
-        cancel()
     }
     close(dataNodeChan)
     //Wait until writing thread is done writing
