@@ -1,10 +1,10 @@
 import SideNav from './SideNav'
-
+import NavBar from './NavBar'
 function Settings(): JSX.Element {
   return (
     <div className="flex ml-52">
       <SideNav />
-
+      <NavBar />
       <div className="flex-1 p-6">
         <h1 className="text-2xl font-bold mb-4">Settings</h1>
         <div className="border-b border-gray-300 mb-6"></div>

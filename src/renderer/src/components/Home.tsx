@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import SideNav from './SideNav'
+import Navbar from './NavBar'
 import { FaFolderOpen, FaRegFilePdf, FaRegFile, FaCloudUploadAlt } from 'react-icons/fa'
 import { LuFileText } from 'react-icons/lu'
 import { BsFiletypeMp4, BsFiletypeMp3, BsFiletypePng, BsFiletypeJpg } from 'react-icons/bs'
@@ -46,6 +47,7 @@ function Home(): JSX.Element {
   return (
     <div className="flex ml-52">
       <SideNav />
+      <Navbar />
 
       <div className="flex-1 p-6">
         <h1 className="text-2xl font-bold mb-4">Welcome!</h1>

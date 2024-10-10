@@ -1,6 +1,6 @@
 import SideNav from './SideNav'
 import { FaRegClipboard } from 'react-icons/fa'
-
+import NavBar from './NavBar'
 function Wallet(): JSX.Element {
   const handleCopyToClipboard = () => {
     navigator.clipboard
@@ -16,6 +16,7 @@ function Wallet(): JSX.Element {
   return (
     <div className="flex ml-52">
       <SideNav />
+      <NavBar />
 
       <div className="flex-1 p-6">
         <h1 className="text-2xl font-bold mb-4">Wallet</h1>
