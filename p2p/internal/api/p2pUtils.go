@@ -8,6 +8,7 @@ import (
     "context"
     "log"
     "encoding/json"
+    // ipfslog "github.com/ipfs/go-log/v2"
     "github.com/libp2p/go-libp2p/core/network"
     "github.com/libp2p/go-libp2p"
     "github.com/libp2p/go-libp2p/core/host"
@@ -38,11 +39,12 @@ func (v *CustomValidator) Select(key string, values [][]byte) (int, error) {
     return 0, nil
 }
 
-// const relayNodeAddr = "/ip4/130.245.173.221/tcp/4001/p2p/12D3KooWDpJ7As7BWAwRMfu1VU2WCqNjvq387JEYKDBj4kx6nXTN"
+const relayNodeAddr = "/ip4/130.245.173.221/tcp/4001/p2p/12D3KooWDpJ7As7BWAwRMfu1VU2WCqNjvq387JEYKDBj4kx6nXTN"
 // const bootstrapNodeAddr = "/ip4/130.245.173.221/tcp/4001/p2p/12D3KooWDpJ7As7BWAwRMfu1VU2WCqNjvq387JEYKDBj4kx6nXTN"
 // const bootstrapNodeAddr = "/ip4/130.245.173.222/tcp/61000/p2p/12D3KooWQd1K1k8XA9xVEzSAu7HUCodC7LJB6uW5Kw4VwkRdstPE"
-const relayNodeAddr = "/ip4/130.245.136.245/tcp/4001/p2p/12D3KooWBTMg3kCjcKQLaTVze2Aeks3s9ibiGMRYkVi3saDXBZeZ"
-const bootstrapNodeAddr = "/ip4/130.245.136.245/tcp/4001/p2p/12D3KooWBTMg3kCjcKQLaTVze2Aeks3s9ibiGMRYkVi3saDXBZeZ"
+// const relayNodeAddr = "/ip4/130.245.136.245/tcp/4001/p2p/12D3KooWBTMg3kCjcKQLaTVze2Aeks3s9ibiGMRYkVi3saDXBZeZ"
+// var bootstrapNodeAddrs = [3]string{"/ip4/130.245.173.222/tcp/61000/p2p/12D3KooWQd1K1k8XA9xVEzSAu7HUCodC7LJB6uW5Kw4VwkRdstPE", "/ip4/130.245.136.245/tcp/4001/p2p/12D3KooWBTMg3kCjcKQLaTVze2Aeks3s9ibiGMRYkVi3saDXBZeZ", "/ip4/130.245.136.239/tcp/4001/p2p/12D3KooWESnJyyxB3J86N9DimRqz2NHkm7EohBXXs8FRJNFZHQGo"}
+var bootstrapNodeAddrs = [1]string{"/ip4/130.245.173.222/tcp/61000/p2p/12D3KooWQd1K1k8XA9xVEzSAu7HUCodC7LJB6uW5Kw4VwkRdstPE"}
 // const bootstrapNodeAddr = "/ip4/130.245.173.221/tcp/4001/p2p/12D3KooWDpJ7As7BWAwRMfu1VU2WCqNjvq387JEYKDBj4kx6nXTN/p2p-circuit/p2p/12D3KooWBTMg3kCjcKQLaTVze2Aeks3s9ibiGMRYkVi3saDXBZeZ"
 
 func p2pCreateHost(ctx context.Context, privKey *crypto.PrivKey) (host.Host, error) {
@@ -55,6 +57,7 @@ func p2pCreateHost(ctx context.Context, privKey *crypto.PrivKey) (host.Host, err
             libp2p.EnableRelayService(),
             libp2p.EnableNATService(),
             libp2p.EnableHolePunching(),
+            libp2p.EnableAutoNATv2(),
     )
     if err != nil {
         log.Printf("Failed to create libp2p host. %v\n", err)
@@ -79,6 +82,7 @@ func p2pCreateHost(ctx context.Context, privKey *crypto.PrivKey) (host.Host, err
         }
         return nil, err
     }
+
     return node, err
 }
 
@@ -104,8 +108,6 @@ func p2pMakeReservation(ctx context.Context, node host.Host) error {
 
     // Add the relayed address to the host's multiaddresses
     node.Peerstore().AddAddrs(node.ID(), relayedMultiaddrs, peerstore.PermanentAddrTTL) */
-    log.Println("My Addresses: ", node.Addrs())
-    log.Println("My Addresses: ", node.Network().ListenAddresses())
 
     return nil
 }

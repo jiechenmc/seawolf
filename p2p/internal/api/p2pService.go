@@ -152,9 +152,15 @@ func (s *P2PService) Login( username string, password string) (string, error) {
     s.p2pHost = &newHost
     log.Printf("Successfully created libp2p host with peer ID: %v\n", (*s.p2pHost).ID())
 
-    //Connect to bootstrap node
-    err = p2pConnectToPeer(ctx, *s.p2pHost, bootstrapNodeAddr)
-    if err != nil {
+    //Connect to at least one bootstrap node
+    connSuccess := false
+    for _, bootstrapNodeAddr := range bootstrapNodeAddrs {
+        err = p2pConnectToPeer(ctx, *s.p2pHost, bootstrapNodeAddr)
+        if err == nil {
+            connSuccess = true
+        }
+    }
+    if !connSuccess {
         //Delete libp2p host
         p2pDeleteHost(*s.p2pHost)
         s.p2pHost = nil

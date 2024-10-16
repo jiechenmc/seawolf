@@ -14,6 +14,7 @@ import (
     "github.com/ipfs/boxo/bitswap/network"
     "github.com/ipfs/boxo/blockservice"
     "github.com/ipfs/go-datastore"
+    dssync "github.com/ipfs/go-datastore/sync"
     pb "github.com/ipfs/boxo/ipld/merkledag/pb"
     dht "github.com/libp2p/go-libp2p-kad-dht"
     ipld "github.com/ipfs/go-ipld-format"
@@ -30,9 +31,10 @@ var comboService *dag.ComboService = nil
 func bitswapCreate(ctx context.Context, node host.Host, kadDHT *dht.IpfsDHT) (*bitswap.Bitswap, *blockstore.Blockstore) {
     //Create datastore
     ds := datastore.NewMapDatastore()
+    mds := dssync.MutexWrap(ds)
 
     //Create a blockstore
-    bstore := blockstore.NewBlockstore(ds)
+    bstore := blockstore.NewBlockstore(mds)
 
     //Create a bitswap network
     bsNetwork := network.NewFromIpfsHost(node, kadDHT, network.Prefix("/orcanet/p2p/seawolf"))
