@@ -1,14 +1,15 @@
 import SideNav from './SideNav'
 import NavBar from './NavBar'
+
 function Exchange(): JSX.Element {
   return (
     <div className="flex ml-52">
       <SideNav />
-      <NavBar />
+      {/* <NavBar /> */}
       <div className="flex-1 p-6">
         <h1 className="text-2xl font-bold mb-4">Getting Files</h1>
 
-        <div className="flex justify-between mb-16 w-1/3">
+        <div className="flex justify-between mb-16 w-1/2">
           <div className="bg-white p-4 rounded-lg shadow-md w-full">
             <h2 className="text-xl font-semibold">Download File</h2>
 
@@ -16,7 +17,7 @@ function Exchange(): JSX.Element {
               <label className="block text-sm font-medium text-gray-700 mb-2">File Hash ID</label>
               <input
                 type="text"
-                className="mt-1 block w-1/3 border border-gray-300 rounded-md p-2"
+                className="mt-1 block w-3/4 border border-gray-300 rounded-md p-2"
                 placeholder="Hash ID"
               />
             </div>
@@ -24,7 +25,7 @@ function Exchange(): JSX.Element {
               <label className="block text-sm font-medium text-gray-700 mb-2">Amount</label>
               <input
                 type="number"
-                className="mt-1 block w-1/3 border border-gray-300 rounded-md p-2"
+                className="mt-1 block w-3/4 border border-gray-300 rounded-md p-2"
                 placeholder="0"
                 min="0"
               />

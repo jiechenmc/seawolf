@@ -1,6 +1,6 @@
 import React from 'react'
 import Logo from '../assets/logo.png'
-import { FaHome, FaExchangeAlt, FaCog, FaWallet } from 'react-icons/fa'
+import { FaHome, FaExchangeAlt, FaCog, FaWallet, FaGlobeAmericas } from 'react-icons/fa'
 import { GiTwoCoins } from 'react-icons/gi'
 import { useNavigate } from 'react-router-dom'
 
@@ -44,6 +44,14 @@ function SideNav(): JSX.Element {
         >
           <GiTwoCoins className="mr-5 text-3xl" />
           <span>Mining</span>
+        </button>
+
+        <button
+          className="flex items-center px-6 py-2 w-11/12 hover:bg-[#9db6b6] ml-1 rounded-lg font-semibold"
+          onClick={(event) => handleClickTab(event, '/proxy')}
+        >
+          <FaGlobeAmericas className="mr-5 text-3xl" />
+          <span>Proxy</span>
         </button>
 
         <button

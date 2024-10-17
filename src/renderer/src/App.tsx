@@ -3,6 +3,7 @@ import Login from './components/Login'
 import Home from './components/Home'
 import Exchange from './components/Exchange'
 import Mining from './components/Mining'
+import Proxy from './components/Proxy'
 import Wallet from './components/Wallet'
 import Settings from './components/Settings'
 
@@ -14,6 +15,7 @@ function App(): JSX.Element {
         <Route path="/home" element={<Home />} />
         <Route path="/exchange" element={<Exchange />} />
         <Route path="/mining" element={<Mining />} />
+        <Route path="/proxy" element={<Proxy />} />
         <Route path="/wallet" element={<Wallet />} />
         <Route path="/settings" element={<Settings />} />
       </Routes>
