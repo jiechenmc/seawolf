@@ -8,6 +8,7 @@ import (
     "context"
     "log"
     "encoding/json"
+    "time"
     // ipfslog "github.com/ipfs/go-log/v2"
     "github.com/libp2p/go-libp2p/core/network"
     "github.com/libp2p/go-libp2p"
@@ -24,9 +25,9 @@ import (
 /* CODE FROM TA TUTORIAL */
 
 type PeerStatus struct {
-    PeerID peer.ID                    `json:"peer_id"`
-    Addresses []multiaddr.Multiaddr   `json:"addrs,omitempty"`
-    IsConnected bool                  `json:"is_connected"`
+    PeerID peer.ID              `json:"peer_id"`
+    Addrs []multiaddr.Multiaddr `json:"addrs,omitempty"`
+    IsConnected bool            `json:"is_connected"`
 }
 
 type CustomValidator struct{}
@@ -133,6 +134,37 @@ func p2pCreateDHT(ctx context.Context, h host.Host) (*dht.IpfsDHT, error) {
     }
 
     return kadDHT, nil
+}
+
+func p2pConnectToPeerID(ctx context.Context, node host.Host, kadDHT *dht.IpfsDHT, peerIDStr string) error {
+    peerID, err := peer.Decode(peerIDStr)
+    if err != nil {
+        log.Printf("Failed to decode peer ID string '%v'. %v\n", peerIDStr, err)
+        return invalidParams
+    }
+
+    timeoutCtx, cancel := context.WithTimeout(ctx, time.Second * 10)
+    //Attempt to find peer in own peerstore or via DHT
+    peerStatus, err := p2pFindPeer(timeoutCtx, node, kadDHT, peerIDStr)
+    cancel()
+    if err == nil && len(peerStatus.Addrs) != 0 {
+        //If we're already connected, return immediately
+        if peerStatus.IsConnected {
+            log.Printf("Already connected to peer: %v\n", peerIDStr)
+            return nil
+        }
+        timeoutCtx, cancel = context.WithTimeout(ctx, time.Second * 10)
+		err = node.Connect(timeoutCtx, peer.AddrInfo{ ID: peerID })
+        cancel()
+        //Return if we've successfully connected
+        if err == nil {
+            log.Printf("Successfully connected to peer: %v\n", peerIDStr)
+            return nil
+        }
+    }
+    //Fallback by trying to connect via relay
+    err = p2pConnectToPeerUsingRelay(ctx, node, peerIDStr)
+    return err
 }
 
 // Here peerAddr is the String format of Multiaddr of a peer
@@ -258,12 +290,20 @@ func p2pGetPeers(node host.Host) []PeerStatus {
     return peerStatuses
 }
 
-func p2pFindPeer(ctx context.Context, kadDHT *dht.IpfsDHT, peerIDStr string) (PeerStatus, error) {
+func p2pFindPeer(ctx context.Context, node host.Host, kadDHT *dht.IpfsDHT, peerIDStr string) (PeerStatus, error) {
     peerID, err := peer.Decode(peerIDStr)
     if err != nil {
         log.Printf("Failed to decode peer ID string '%v'. %v\n", peerIDStr, err)
         return PeerStatus{}, invalidParams
     }
+    //Attempt to find peer in local peerstore
+    peers := p2pGetPeers(node)
+    for _, p := range peers {
+        if p.PeerID == peerID {
+            return p, nil
+        }
+    }
+    //Fall back to DHT if we can't find peer in peerstore
     addrInfo, err := kadDHT.FindPeer(ctx, peerID)
     if err != nil {
         log.Printf("Failed to find peer. %v\n", err)
@@ -272,7 +312,7 @@ func p2pFindPeer(ctx context.Context, kadDHT *dht.IpfsDHT, peerIDStr string) (Pe
     return PeerStatus{ addrInfo.ID, addrInfo.Addrs, false }, nil
 }
 
-func p2pSetupStreamHandlers(node host.Host, messages chan string) {
+func p2pSetupStreamHandlers(node host.Host, kadDHT *dht.IpfsDHT, messages chan string) {
     //Handler for /orcanet/p2p/seawolf/messages protocol for simple message sending
     go node.SetStreamHandler("/orcanet/p2p/seawolf/messages", func(s network.Stream) {
         defer s.Close()
@@ -316,7 +356,7 @@ func p2pSetupStreamHandlers(node host.Host, messages chan string) {
                     if peerID, ok := peerMap["peer_id"].(string); ok {
                         if string(peerID) != string(relayInfo.ID) {
                             log.Printf("/orcanet/p2p: Found new peer %v\n", peerID)
-                            p2pConnectToPeerUsingRelay(ctx, node, peerID)
+                            p2pConnectToPeerID(ctx, node, kadDHT, peerID)
                         }
                     }
                 }
