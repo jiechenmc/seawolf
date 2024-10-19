@@ -599,7 +599,7 @@ func (f *FileShareNode) PutFile(ctx context.Context, inputFile string) (cid.Cid,
 
     node := dag.NodeWithData(buffer).Copy()
     f.bstore.Put(ctx, node)
-    err = f.DHT.Provide(ctx, node.Cid(), false)
+    err = f.DHT.Provide(ctx, node.Cid(), true)
     if err != nil {
         log.Printf("Failed to provide cid. %v\n", err)
         return node.Cid(), nil
