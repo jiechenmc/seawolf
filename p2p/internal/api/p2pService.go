@@ -32,7 +32,8 @@ func (s *P2PService) ConnectToPeer(peerID string) (string, error) {
     if s.p2pHost == nil || s.username == nil {
         return "", notLoggedIn
     }
-    err := p2pConnectToPeerUsingRelay(context.Background(), *s.p2pHost, peerID)
+
+    err := p2pConnectToPeerID(context.Background(), *s.p2pHost, s.kadDHT, peerID)
     if err != nil {
         return "", err
     }
@@ -55,7 +56,7 @@ func (s *P2PService) FindPeer(peerID string) (PeerStatus, error) {
     }
 
     //Find peer
-    peer, err := p2pFindPeer(context.Background(), s.kadDHT, peerID)
+    peer, err := p2pFindPeer(context.Background(), *s.p2pHost, s.kadDHT, peerID)
     if err != nil {
         return PeerStatus{}, err
     }
@@ -183,7 +184,7 @@ func (s *P2PService) Login( username string, password string) (string, error) {
     log.Printf("Successfully logged in user '%v'\n", *s.username)
 
     s.messages = make(chan string, 128)
-    p2pSetupStreamHandlers(*s.p2pHost, s.messages)
+    p2pSetupStreamHandlers(*s.p2pHost, s.kadDHT, s.messages)
     return (*s.p2pHost).ID().String(), nil
 }
 
