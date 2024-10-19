@@ -23,6 +23,7 @@ type P2PService struct {
     rpcPassword *string
     p2pHost *host.Host
     kadDHT *dht.IpfsDHT
+    fsNode *FileShareNode
     exchange *bitswap.Bitswap
     bstore *blockstore.Blockstore
     messages chan string
@@ -185,6 +186,9 @@ func (s *P2PService) Login( username string, password string) (string, error) {
 
     s.messages = make(chan string, 128)
     p2pSetupStreamHandlers(*s.p2pHost, s.kadDHT, s.messages)
+
+    s.fsNode = FileShareNodeCreate(*s.p2pHost, s.kadDHT)
+
     return (*s.p2pHost).ID().String(), nil
 }
 
@@ -270,7 +274,8 @@ func (s *P2PService) PutFile(inputFile string) (string, error) {
         log.Printf("Attempted to put file when not logged in\n")
         return "", notLoggedIn
     }
-    cid, err := bitswapPutFile(context.Background(), s.exchange, s.bstore, inputFile)
+    // cid, err := bitswapPutFile(context.Background(), s.exchange, s.bstore, inputFile)
+    cid, err := s.fsNode.PutFile(context.Background(), inputFile)
     if err != nil {
         return "", err
     }
@@ -282,7 +287,8 @@ func (s *P2PService) GetFile(cid string, outputFile string) (string, error) {
         log.Printf("Attempted to put file when not logged in\n")
         return "", notLoggedIn
     }
-    err := bitswapGetFile(context.Background(), s.exchange, s.bstore, cid, outputFile)
+    // err := bitswapGetFile(context.Background(), s.exchange, s.bstore, cid, outputFile)
+    err := s.fsNode.GetFile(context.Background(), cid, outputFile)
     if err != nil {
         return "", err
     }

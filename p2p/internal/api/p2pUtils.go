@@ -18,6 +18,7 @@ import (
     "github.com/libp2p/go-libp2p/core/crypto"
     "github.com/libp2p/go-libp2p/core/peerstore"
     "github.com/libp2p/go-libp2p/p2p/protocol/circuitv2/client"
+    "github.com/libp2p/go-libp2p/core/protocol"
     dht "github.com/libp2p/go-libp2p-kad-dht"
     record "github.com/libp2p/go-libp2p-record"
 )
@@ -100,16 +101,6 @@ func p2pMakeReservation(ctx context.Context, node host.Host) error {
     }
 
     log.Printf("Reserved slot on relay: %v\n", reservation)
-    //Advertise relayed address
-    /* relayedMultiaddrs := make([]multiaddr.Multiaddr, len(reservation.Addrs))
-    for i, relayAddr := range reservation.Addrs {
-        relayedMultiaddrs[i] = relayAddr.Encapsulate(multiaddr.StringCast("/p2p-circuit/p2p/" + node.ID().String()))
-    }
-    log.Println("Relayed Addresses: ", relayedMultiaddrs)
-
-    // Add the relayed address to the host's multiaddresses
-    node.Peerstore().AddAddrs(node.ID(), relayedMultiaddrs, peerstore.PermanentAddrTTL) */
-
     return nil
 }
 
@@ -314,7 +305,7 @@ func p2pFindPeer(ctx context.Context, node host.Host, kadDHT *dht.IpfsDHT, peerI
 
 func p2pSetupStreamHandlers(node host.Host, kadDHT *dht.IpfsDHT, messages chan string) {
     //Handler for /orcanet/p2p/seawolf/messages protocol for simple message sending
-    go node.SetStreamHandler("/orcanet/p2p/seawolf/messages", func(s network.Stream) {
+    node.SetStreamHandler("/orcanet/p2p/seawolf/messages", func(s network.Stream) {
         defer s.Close()
         buf := bufio.NewReader(s)
         message, err := buf.ReadString('\n')
@@ -331,7 +322,7 @@ func p2pSetupStreamHandlers(node host.Host, kadDHT *dht.IpfsDHT, messages chan s
     })
     //Handler for /orcanet/p2p for peer discovery
     relayInfo, _ := peer.AddrInfoFromString(relayNodeAddr)
-    go node.SetStreamHandler("/orcanet/p2p", func(s network.Stream) {
+    node.SetStreamHandler("/orcanet/p2p", func(s network.Stream) {
         defer s.Close()
         ctx := context.Background()
 
@@ -387,4 +378,90 @@ func p2pSendMessage(ctx context.Context, node host.Host, peerIDStr string, messa
         return internalError
     }
     return nil
+}
+
+type P2PStream struct {
+    RemotePeerID peer.ID
+    NetworkStream *network.Stream
+    ReadWriter *bufio.ReadWriter
+}
+
+func p2pOpenStream(ctx context.Context, protocolStr string, node host.Host, peerIDStr string) (P2PStream, error) {
+    peerID, err := peer.Decode(peerIDStr)
+    if err != nil {
+        log.Printf("Failed to decode peer ID string '%v'. %v\n", peerIDStr, err)
+        return P2PStream{}, invalidParams
+    }
+
+    stream, err := node.NewStream(network.WithAllowLimitedConn(ctx, protocolStr), peerID, protocol.ID(protocolStr))
+    if err != nil {
+        log.Printf("Failed to open stream after multiple attempts. %v", err)
+        return P2PStream{}, internalError
+    }
+
+    reader := bufio.NewReader(stream)
+    writer := bufio.NewWriter(stream)
+    rw := bufio.NewReadWriter(reader, writer)
+
+    return P2PStream{ peerID, &stream, rw }, err
+}
+
+func p2pWrapStream(stream *network.Stream) P2PStream {
+    reader := bufio.NewReader(*stream)
+    writer := bufio.NewWriter(*stream)
+    rw := bufio.NewReadWriter(reader, writer)
+    return P2PStream{ (*stream).Conn().RemotePeer(), stream, rw }
+}
+
+func (s P2PStream) Send(bytes []byte) error {
+    _, err := s.ReadWriter.Write(bytes)
+    if err != nil {
+        log.Printf("%v: Failed to write to stream. %v\n", (*s.NetworkStream).Protocol(), err)
+        return err
+    }
+    return nil
+}
+
+func (s P2PStream) SendString(str string) error {
+    fmt.Fprint(s.ReadWriter, str)
+    err := s.ReadWriter.Flush()
+    if err != nil {
+        log.Printf("%v: Failed to write string to stream. %v\n", (*s.NetworkStream).Protocol(), err)
+        return err
+    }
+    return nil
+}
+
+func (s P2PStream) Read(n int, timeout time.Duration) ([]byte, error) {
+    if timeout != 0 {
+        (*s.NetworkStream).SetReadDeadline(time.Now().Add(timeout))
+    }
+    var err error
+    bytes := make([]byte, n)
+    //Read n bytes
+    for i := 0; i < n; i ++ {
+        bytes[i], err = s.ReadWriter.ReadByte()
+        if err != nil {
+            log.Printf("%v: Failed to read from stream. %v\n", (*s.NetworkStream).Protocol(), err)
+            return []byte{}, err
+        }
+    }
+    return bytes, nil
+}
+
+func (s P2PStream) ReadString(delim byte, timeout time.Duration) (string, error) {
+    if timeout != 0 {
+        (*s.NetworkStream).SetReadDeadline(time.Now().Add(timeout))
+    }
+    str, err := s.ReadWriter.ReadString(delim)
+    //Return an error even encountering EOF, the delimiter should be part of protocol
+    if err != nil {
+        log.Printf("%v: Failed to read string from stream. %v\n", (*s.NetworkStream).Protocol(), err)
+        return "", err
+    }
+    return str, nil
+}
+
+func (s P2PStream) Close() {
+    (*s.NetworkStream).Close()
 }
