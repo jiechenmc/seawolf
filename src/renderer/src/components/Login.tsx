@@ -10,8 +10,6 @@ function Login(): JSX.Element {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    console.log('Logging in with: ', username, password)
-
     navigate('home')
   }
 

@@ -7,7 +7,7 @@ function Exchange(): JSX.Element {
       <SideNav />
       {/* <NavBar /> */}
       <div className="flex-1 p-6">
-        <h1 className="text-2xl font-bold mb-4">Getting Files</h1>
+        <h1 className="text-2xl font-bold mb-4">Exchange</h1>
 
         <div className="flex justify-between mb-16 w-1/2">
           <div className="bg-white p-4 rounded-lg shadow-md w-full">

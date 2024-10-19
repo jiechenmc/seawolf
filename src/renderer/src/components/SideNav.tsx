@@ -9,7 +9,6 @@ function SideNav(): JSX.Element {
 
   const handleClickTab = (e: React.FormEvent, tab: string) => {
     e.preventDefault()
-    console.log(`clicked ${tab}`)
 
     navigate(tab)
   }

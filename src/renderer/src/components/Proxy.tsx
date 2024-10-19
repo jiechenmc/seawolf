@@ -1,6 +1,7 @@
-import React, { useState } from 'react'
+import React, { useContext, useState } from 'react'
 import SideNav from './SideNav'
-import Navbar from './NavBar'
+// import Navbar from './NavBar'
+import { AppContext } from '../AppContext'
 
 type Proxy = {
   ip: string
@@ -15,8 +16,11 @@ const testList: Proxy[] = [
 ]
 
 function Proxy(): JSX.Element {
-  const [currProxy, setCurrProxy] = useState<Proxy | null>(null)
-  const [listOfProxies, setListOfProxies] = useState<Proxy[]>(testList)
+  // const [currProxy, setCurrProxy] = useState<Proxy | null>(null)
+  // const [listOfProxies, setListOfProxies] = useState<Proxy[]>(testList)
+  const { proxy, proxies } = React.useContext(AppContext)
+  const [currProxy, setCurrProxy] = proxy
+  const [listOfProxies, setListOfProxies] = proxies
 
   const handleChooseProxy = (proxy: Proxy) => {
     const isConfirmed = window.confirm(`Are you sure you want to connect to IP: ${proxy.ip}?`)
@@ -27,7 +31,9 @@ function Proxy(): JSX.Element {
   }
 
   const handleRemoveProxy = () => {
-    const isConfirmed = window.confirm(`Are you sure you want to disconnect from IP: ${currProxy?.ip}?`)
+    const isConfirmed = window.confirm(
+      `Are you sure you want to disconnect from IP: ${currProxy?.ip}?`
+    )
 
     if (isConfirmed) {
       setCurrProxy(null)
@@ -83,7 +89,7 @@ function Proxy(): JSX.Element {
           <div className="flex items-center p-2 border-b border-gray-300">
             <span className="flex-1 font-semibold text-left">IP Address</span>
             <span className="flex-1 font-semibold text-left">Location</span>
-            <span className="flex-1 font-semibold text-left">Cost / Mb</span>
+            <span className="flex-1 font-semibold text-left">Cost / MB</span>
           </div>
           <div>
             {listOfProxies.map((proxy, index) => (
