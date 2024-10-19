@@ -31,7 +31,7 @@ import (
 const fileShareProtocol = "/orcanet/p2p/seawolf/fileshare"
 const fileShareWantHaveTimeout = time.Second * 1
 const fileShareWantTimeout = time.Second * 5
-const fileShareFindProvidersTimeout = time.Second * 5
+const fileShareFindProvidersTimeout = time.Second * 1
 const fileShareIdleTimeout = time.Second * 60
 
 var chunkSize = 256 * 1024
@@ -192,7 +192,7 @@ func handleWantHave(ctx context.Context, stream P2PStream, fsNode *FileShareNode
         }
         //Query local blockstore for cid
         has, err := fsNode.bstore.Has(context.Background(), cid)
-        if err == nil {
+        if err != nil {
             return err
         }
         if has {
@@ -381,7 +381,7 @@ func (s *FileShareSession) SendWantHave(peerID peer.ID, cids []cid.Cid) []cid.Ci
             if err != nil {
                 return nil
             }
-            haveCIDs[i], err = cid.Decode(cidStr)
+            haveCIDs[i], err = cid.Decode(cidStr[:len(cidStr) - 1])
             if err != nil {
                 return nil
             }
@@ -431,8 +431,10 @@ func (s *FileShareSession) CreateKnownPeerStreams() {
     //Iterate through node's known peers and get stream
     for _, peerID := range peerIDs {
         go func(peerID peer.ID) {
-            //Don't care about errors
-            s.GetStream(peerID)
+            if peerID != p2pHost.ID() {
+                //Don't care about errors
+                s.GetStream(peerID)
+            }
             wg.Done()
         }(peerID)
     }
@@ -464,7 +466,7 @@ func (s *FileShareSession) GetCids(reqCids []cid.Cid) ([][]byte, error) {
                         peerIDs = []peer.ID{}
                         s.HavesMap[c] = peerIDs
                     }
-                    peerIDs = append(peerIDs, peerID)
+                    s.HavesMap[c] = append(peerIDs, peerID)
                 }
                 s.havesLock.Unlock()
             }
@@ -474,9 +476,11 @@ func (s *FileShareSession) GetCids(reqCids []cid.Cid) ([][]byte, error) {
     //Wait until we've populate HAVEs from direct peers
     wg.Wait()
     results := make([][]byte, len(reqCids))
+    wg.Add(len(reqCids))
     //Now that we have the 'haves' list, we send wants in addition to querys the DHT for providers for missing CIDs
     for i, reqCid := range reqCids {
         go func(i int, reqCid cid.Cid) {
+            defer wg.Done()
             peerIDs, ok := s.HavesMap[reqCid]
             if !ok {
                 ctxTimeout, cancel := context.WithTimeout(s.sessionContext, time.Second * fileShareFindProvidersTimeout)
@@ -503,6 +507,7 @@ func (s *FileShareSession) GetCids(reqCids []cid.Cid) ([][]byte, error) {
             }
         }(i, reqCid)
     }
+    wg.Wait()
     return results, nil
 }
 
@@ -548,7 +553,7 @@ func (f *FileShareNode) GetFile(ctx context.Context, rootCid string, outputFile 
 
     pbNode := pb.PBNode{}
     if bytes[0] == nil {
-        log.Printf("Failed to get data.\n")
+        log.Printf("Failed to get file.\n")
         return internalError
     }
     err = pbNode.Unmarshal(bytes[0])
@@ -594,7 +599,11 @@ func (f *FileShareNode) PutFile(ctx context.Context, inputFile string) (cid.Cid,
 
     node := dag.NodeWithData(buffer).Copy()
     f.bstore.Put(ctx, node)
-    f.DHT.Provide(ctx, node.Cid(), false)
+    err = f.DHT.Provide(ctx, node.Cid(), false)
+    if err != nil {
+        log.Printf("Failed to provide cid. %v\n", err)
+        return node.Cid(), nil
+    }
 
     return node.Cid(), nil
 }

@@ -416,6 +416,11 @@ func p2pWrapStream(stream *network.Stream) P2PStream {
 func (s P2PStream) Send(bytes []byte) error {
     _, err := s.ReadWriter.Write(bytes)
     if err != nil {
+        goto failed
+    }
+    err = s.ReadWriter.Flush()
+failed:
+    if err != nil {
         log.Printf("%v: Failed to write to stream. %v\n", (*s.NetworkStream).Protocol(), err)
         return err
     }
@@ -423,8 +428,12 @@ func (s P2PStream) Send(bytes []byte) error {
 }
 
 func (s P2PStream) SendString(str string) error {
-    fmt.Fprint(s.ReadWriter, str)
-    err := s.ReadWriter.Flush()
+    _, err := fmt.Fprint(s.ReadWriter, str)
+    if err != nil {
+        goto failed
+    }
+    err = s.ReadWriter.Flush()
+failed:
     if err != nil {
         log.Printf("%v: Failed to write string to stream. %v\n", (*s.NetworkStream).Protocol(), err)
         return err

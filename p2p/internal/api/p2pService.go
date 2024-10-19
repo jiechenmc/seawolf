@@ -301,9 +301,9 @@ func (s *P2PService) FindProviders(cid string) ([]peer.AddrInfo, error) {
         return nil, notLoggedIn
     }
     ctx := context.Background()
-	// Query the DHT to find the providers of the block
-	ctxTimeout, cancel := context.WithTimeout(ctx, time.Second*10)
-	defer cancel()
+    // Query the DHT to find the providers of the block
+    ctxTimeout, cancel := context.WithTimeout(ctx, time.Second*2)
+    defer cancel()
 
     providers, err := bitswapFindProviders(ctxTimeout, s.kadDHT, cid)
     if err != nil {
