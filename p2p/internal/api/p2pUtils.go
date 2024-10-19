@@ -442,13 +442,13 @@ failed:
 }
 
 func (s P2PStream) Read(n int, timeout time.Duration) ([]byte, error) {
-    if timeout != 0 {
-        (*s.NetworkStream).SetReadDeadline(time.Now().Add(timeout))
-    }
     var err error
     bytes := make([]byte, n)
     //Read n bytes
     for i := 0; i < n; i ++ {
+        if timeout != 0 {
+            (*s.NetworkStream).SetReadDeadline(time.Now().Add(timeout))
+        }
         bytes[i], err = s.ReadWriter.ReadByte()
         if err != nil {
             log.Printf("%v: Failed to read from stream. %v\n", (*s.NetworkStream).Protocol(), err)

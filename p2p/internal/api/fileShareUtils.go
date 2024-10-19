@@ -414,7 +414,7 @@ func (s *FileShareSession) SendWant(peerID peer.ID, c cid.Cid) []byte {
         if err != nil {
             return nil
         }
-        data, err := s.read(peerID, size, 0)
+        data, err := s.read(peerID, size, fileShareWantHaveTimeout)
         if err != nil {
             return nil
         }
