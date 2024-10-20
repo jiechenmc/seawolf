@@ -1,6 +1,6 @@
 import React from 'react'
 import Logo from '../assets/logo.png'
-import { FaHome, FaExchangeAlt, FaCog, FaGlobeAmericas } from 'react-icons/fa'
+import { FaHome, FaExchangeAlt, FaMale, FaGlobeAmericas, FaSignOutAlt  } from 'react-icons/fa'
 import { GiTwoCoins } from 'react-icons/gi'
 import { useNavigate } from 'react-router-dom'
 
@@ -65,12 +65,20 @@ function SideNav(): JSX.Element {
           className="flex items-center px-6 py-2 w-11/12 hover:bg-[#9db6b6] ml-1 rounded-lg font-semibold"
           onClick={(event) => handleClickTab(event, '/account')}
         >
-          <FaCog className="mr-5 text-3xl" />
+          <FaMale className="mr-5 text-3xl" />
           <span>Account</span>
+        </button>
+
+        <button
+          className="flex items-center px-6 py-2 w-11/12 hover:bg-[#9db6b6] ml-1 rounded-lg font-semibold"
+          onClick={(event) => handleClickTab(event, '/')}
+        >
+          <FaSignOutAlt className="mr-5 text-3xl" />
+          <span>Logout</span>
         </button>
       </div>
     </div>
-  )
+  );
 }
 
 export default SideNav
