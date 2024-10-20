@@ -5,7 +5,7 @@ import Exchange from './components/Exchange'
 import Mining from './components/Mining'
 import Proxy from './components/Proxy'
 import Wallet from './components/Wallet'
-import Settings from './components/Settings'
+import Account from './components/Account'
 import { AppProvider } from './AppContext'
 
 function App(): JSX.Element {
@@ -19,7 +19,7 @@ function App(): JSX.Element {
           <Route path="/mining" element={<Mining />} />
           <Route path="/proxy" element={<Proxy />} />
           <Route path="/wallet" element={<Wallet />} />
-          <Route path="/settings" element={<Settings />} />
+          <Route path="/account" element={<Account />} />
         </Routes>
       </Router>
     </AppProvider>
