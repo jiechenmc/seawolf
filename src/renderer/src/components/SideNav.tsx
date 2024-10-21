@@ -1,8 +1,8 @@
 import React from 'react'
 import Logo from '../assets/logo.png'
-import { FaHome, FaExchangeAlt, FaMale, FaGlobeAmericas, FaSignOutAlt } from 'react-icons/fa'
+import { FaMale, FaGlobeAmericas, FaSignOutAlt } from 'react-icons/fa'
 import { IoCloudUploadSharp } from 'react-icons/io5'
-import { IoIosCloudDownload, IoIosLogOut } from 'react-icons/io'
+import { IoIosCloudDownload } from 'react-icons/io'
 import { GiTwoCoins } from 'react-icons/gi'
 import { useNavigate } from 'react-router-dom'
 
@@ -70,20 +70,13 @@ function SideNav(): JSX.Element {
           <FaMale className="mr-5 text-3xl" />
           <span>Account</span>
         </button>
-
-        <button
-          className="flex items-center px-6 py-2 w-11/12 hover:bg-[#9db6b6] ml-1 rounded-lg font-semibold"
-          onClick={(event) => handleClickTab(event, '/')}
-        >
-          <FaSignOutAlt className="mr-5 text-3xl" />
-          <span>Logout</span>
-        </button>
       </div>
+
       <button
-        className="flex items-center px-6 py-2 w-11/12 hover:bg-[#9db6b6] ml-1 rounded-lg font-semibold mt-20"
+        className="flex items-center px-6 py-2 w-11/12 hover:bg-[#9db6b6] ml-1 rounded-lg font-semibold mt-36"
         onClick={(event) => handleClickTab(event, '/')}
       >
-        <IoIosLogOut className="mr-5 text-3xl" />
+        <FaSignOutAlt className="mr-5 text-3xl" />
         <span>Logout</span>
       </button>
     </div>

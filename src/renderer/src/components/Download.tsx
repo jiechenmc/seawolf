@@ -2,6 +2,7 @@ import SideNav from './SideNav'
 import NavBar from './NavBar'
 import React, { useState } from 'react'
 import { AppContext } from '../AppContext'
+import { FaRegTrashAlt } from 'react-icons/fa'
 import { FaRegCirclePause } from 'react-icons/fa6'
 import { FaRegPlayCircle } from 'react-icons/fa'
 
@@ -75,6 +76,21 @@ function Download(): JSX.Element {
     })
   }
 
+  const handleCancelDownload = (downloadedFile, index: number) => {
+    let confirmed = window.confirm(
+      `Are you sure want to cancel download for: ${downloadedFile.file.name}`
+    )
+    if (confirmed) {
+      setDownloadedFiles((prevFiles) => {
+        setWalletBalance((prevBalance: number) => prevBalance + downloadedFile.file.cost)
+        const updatedFiles = [...prevFiles]
+        updatedFiles.splice(index, 1)
+
+        return updatedFiles
+      })
+    }
+  }
+
   return (
     <div className="flex ml-52">
       <SideNav />
@@ -84,7 +100,7 @@ function Download(): JSX.Element {
 
         <div className="flex justify-between mb-16 w-1/2">
           <div className="bg-white p-4 rounded-lg shadow-md w-full">
-            <h2 className="text-xl font-semibold">Get File</h2>
+            <h2 className="text-xl font-semibold">Get A File</h2>
 
             <div className="mt-7">
               <label className="block text-sm font-medium text-gray-700 mb-2">File Hash ID</label>
@@ -96,15 +112,6 @@ function Download(): JSX.Element {
                 onChange={(e) => setSearchHash(e.target.value)}
               />
             </div>
-            {/* <div className="mt-5">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Amount</label>
-              <input
-                type="number"
-                className="mt-1 block w-3/4 border border-gray-300 rounded-md p-2"
-                placeholder="0"
-                min="0"
-              />
-            </div> */}
             <button
               className="mt-7 px-4 py-2 bg-[#737fa3] text-white font-semibold rounded-md hover:bg-[#7c85a3]"
               onClick={handleSearchFile}
@@ -144,22 +151,32 @@ function Download(): JSX.Element {
             <span className="flex-1 ">{downloadedFile.eta}</span>
             <span className="flex-1 text-left flex justify-between items-center">
               <span>{downloadedFile.status}</span>
-              {downloadedFile.status === 'Downloading' && (
-                <button
-                  className="text-2xl text-black hover:text-gray-600"
-                  onClick={() => handlePausePlay(index)}
-                >
-                  <FaRegCirclePause />
-                </button>
-              )}
-              {downloadedFile.status === 'Paused' && (
-                <button
-                  className="text-2xl text-black hover:text-gray-600"
-                  onClick={() => handlePausePlay(index)}
-                >
-                  <FaRegPlayCircle />
-                </button>
-              )}
+              <div className="flex items-center ml-auto space-x-4">
+                {downloadedFile.status === 'Downloading' && (
+                  <button
+                    className="text-2xl text-black hover:text-gray-600"
+                    onClick={() => handlePausePlay(index)}
+                  >
+                    <FaRegCirclePause />
+                  </button>
+                )}
+                {downloadedFile.status === 'Paused' && (
+                  <button
+                    className="text-2xl text-black hover:text-gray-600"
+                    onClick={() => handlePausePlay(index)}
+                  >
+                    <FaRegPlayCircle />
+                  </button>
+                )}
+                {downloadedFile.status !== 'Done' && (
+                  <button
+                    onClick={() => handleCancelDownload(downloadedFile, index)}
+                    className="text-red-500 hover:text-red-700"
+                  >
+                    <FaRegTrashAlt />
+                  </button>
+                )}
+              </div>
             </span>
           </div>
         ))}

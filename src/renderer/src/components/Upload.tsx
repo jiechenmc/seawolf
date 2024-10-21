@@ -22,13 +22,15 @@ type fileType = {
 function Upload(): JSX.Element {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
-  const { totalFiles, totalBytes, allFiles, viewFiles, search } = React.useContext(AppContext)
+  const { totalFiles, totalBytes, allFiles, viewFiles, search, history } =
+    React.useContext(AppContext)
 
   const [numFiles, setNumFiles] = totalFiles
   const [numBytes, setNumBytes] = totalBytes
   const [listOfFiles, setListOfFiles] = allFiles
   const [filesToView, setFilesToView] = viewFiles
   const [searchHash, setSearchHash] = search
+  const [historyView, setHistoryView] = history
 
   const [fileQueue, setfileQueue] = useState<fileType[]>([])
   const [fileQueueIndex, setFileQueueIndex] = useState<number>(0)
@@ -116,16 +118,17 @@ function Upload(): JSX.Element {
     fileInputRef.current?.click()
   }
 
-  const handleRemoveFile = (file: fileType) => {
-    let newByteSize = numBytes - file.size
-    console.log(numBytes, file.size, newByteSize)
-    setNumBytes(() => (newByteSize === 0 ? 0 : newByteSize))
-    setNumFiles((prevFiles: number) => prevFiles - 1)
-    let fileIndex = listOfFiles.indexOf(file)
-    let newFileList = listOfFiles
-    newFileList.splice(fileIndex, 1)
-    setListOfFiles(() => newFileList)
-    setFilesToView(() => newFileList)
+  const handleRemoveFile = (index: number, file: fileType) => {
+    let confirmed = window.confirm(`Are you sure you want to delete: ${file.name}?`)
+    if (confirmed) {
+      let newByteSize = numBytes - file.size
+      setNumBytes(() => (newByteSize === 0 ? 0 : newByteSize))
+      setNumFiles((prevFiles: number) => prevFiles - 1)
+      let newFileList = listOfFiles
+      newFileList.splice(index, 1)
+      setListOfFiles(() => newFileList)
+      setFilesToView(() => newFileList)
+    }
   }
 
   const handleCostConfirm = () => {
@@ -138,6 +141,22 @@ function Upload(): JSX.Element {
       setNumFiles((prevFiles: number) => prevFiles + fileCount)
       setListOfFiles((prevList: fileType[]) => prevList.concat(fileQueue))
       setFilesToView((prevList: fileType[]) => prevList.concat(fileQueue))
+
+      console.log('before here')
+
+      // setHistoryView((prevView) => {
+      //   console.log('here')
+      //   fileQueue.forEach((file) => {
+      //     prevView.unshift({
+      //       date: new Date(),
+      //       file: file,
+      //       type: 'uploaded',
+      //       proxy: 'self'
+      //     })
+      //   })
+      // })
+
+      console.log(historyView)
 
       handleCostCancelAll()
     }
@@ -269,7 +288,7 @@ function Upload(): JSX.Element {
             <span className="flex-1 text-left flex justify-between items-center">
               <span>{file.cost} SWE</span>
               <button
-                onClick={() => handleRemoveFile(file)}
+                onClick={() => handleRemoveFile(index, file)}
                 className="text-red-500 hover:text-red-700"
               >
                 <FaRegTrashAlt />
