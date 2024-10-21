@@ -1,8 +1,14 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Logo from '../assets/logo.png'
+import React from 'react'
+import { AppContext } from '../AppContext'
 
 function Login(): JSX.Element {
+  const { user } = React.useContext(AppContext)
+
+  const [walletAddress, setWalletAddress] = user
+
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
 
@@ -10,7 +16,9 @@ function Login(): JSX.Element {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    navigate('home')
+
+    setWalletAddress(username)
+    navigate('upload')
   }
 
   return (

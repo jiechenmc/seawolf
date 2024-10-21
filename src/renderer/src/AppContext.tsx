@@ -1,5 +1,12 @@
 import { useState, createContext } from 'react'
 
+type fileType = {
+  cid: number
+  name: string
+  size: number
+  cost: number
+}
+
 type proxyType = {
   ip: string
   location: string
@@ -12,10 +19,26 @@ const testList: proxyType[] = [
   { ip: '192.168.1.3', location: 'Tokyo, Japan', cost: 8 }
 ]
 
+type downloadType = {
+  file: fileType
+  eta: number
+  status: string
+}
+
+const testList2: downloadType[] = [
+  { file: { cid: 2657828461, name: 'something.pdf', size: 10, cost: 14 }, eta: 0, status: 'Done' },
+  { file: { cid: 9477837364, name: 'another.pdf', size: 25, cost: 20 }, eta: 10, status: 'Paused' }
+]
+
+const testList3: downloadType[] = [
+  { file: { cid: 2657828461, name: 'something.pdf', size: 10, cost: 14 }, eta: 0, status: 'Done' },
+  { file: { cid: 9477837364, name: 'another.pdf', size: 25, cost: 20 }, eta: 10, status: 'Paused' }
+]
+
 const AppContext = createContext<any>(null)
 
 const AppProvider = ({ children }) => {
-  const [user, setUser] = useState(null)
+  const [walletAddress, setWalletAddress] = useState(null)
 
   const [numFiles, setNumFiles] = useState(0)
   const [numBytes, setNumBytes] = useState(0)
@@ -24,20 +47,29 @@ const AppProvider = ({ children }) => {
   const [filesToView, setFilesToView] = useState([])
   const [searchHash, setSeearchHash] = useState('')
 
+  const [downloadedFiles, setDownloadedFiles] = useState<downloadType[]>(testList2)
+
   const [currProxy, setCurrProxy] = useState<proxyType | null>(null)
   const [listOfProxies, setListOfProxies] = useState<proxyType[]>(testList)
+
+  const [walletBalance, setWalletBalance] = useState<number>(100)
+
+  const [historyView, setHistoryView] = useState([])
 
   return (
     <AppContext.Provider
       value={{
-        user: [user, setUser],
+        user: [walletAddress, setWalletAddress],
         totalFiles: [numFiles, setNumFiles],
         totalBytes: [numBytes, setNumBytes],
         allFiles: [listOfFiles, setListOfFiles],
         viewFiles: [filesToView, setFilesToView],
         search: [searchHash, setSeearchHash],
         proxy: [currProxy, setCurrProxy],
-        proxies: [listOfProxies, setListOfProxies]
+        proxies: [listOfProxies, setListOfProxies],
+        balance: [walletBalance, setWalletBalance],
+        downloadFiles: [downloadedFiles, setDownloadedFiles],
+        history: [historyView, setHistoryView]
       }}
     >
       {children}

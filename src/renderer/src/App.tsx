@@ -1,7 +1,7 @@
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom'
 import Login from './components/Login'
-import Home from './components/Home'
-import Exchange from './components/Exchange'
+import Upload from './components/Upload'
+import Download from './components/Download'
 import Mining from './components/Mining'
 import Proxy from './components/Proxy'
 import Wallet from './components/Wallet'
@@ -14,8 +14,8 @@ function App(): JSX.Element {
       <Router>
         <Routes>
           <Route path="/" element={<Login />} />
-          <Route path="/home" element={<Home />} />
-          <Route path="/exchange" element={<Exchange />} />
+          <Route path="/upload" element={<Upload />} />
+          <Route path="/download" element={<Download />} />
           <Route path="/mining" element={<Mining />} />
           <Route path="/proxy" element={<Proxy />} />
           <Route path="/wallet" element={<Wallet />} />

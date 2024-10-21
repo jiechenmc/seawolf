@@ -1,6 +1,8 @@
 import React from 'react'
 import Logo from '../assets/logo.png'
-import { FaHome, FaExchangeAlt, FaCog, FaWallet, FaGlobeAmericas } from 'react-icons/fa'
+import { FaCog, FaWallet, FaGlobeAmericas } from 'react-icons/fa'
+import { IoIosCloudDownload, IoIosLogOut } from 'react-icons/io'
+import { IoCloudUploadSharp } from 'react-icons/io5'
 import { GiTwoCoins } from 'react-icons/gi'
 import { useNavigate } from 'react-router-dom'
 
@@ -23,18 +25,18 @@ function SideNav(): JSX.Element {
       <div className="mt-6 space-y-6">
         <button
           className="flex items-center px-6 py-2 w-11/12 hover:bg-[#9db6b6] ml-1 rounded-lg font-semibold"
-          onClick={(event) => handleClickTab(event, '/home')}
+          onClick={(event) => handleClickTab(event, '/upload')}
         >
-          <FaHome className="mr-5 text-3xl" />
-          <span>Home</span>
+          <IoCloudUploadSharp className="mr-5 text-3xl" />
+          <span>Upload</span>
         </button>
 
         <button
           className="flex items-center px-6 py-2 w-11/12 hover:bg-[#9db6b6] ml-1 rounded-lg font-semibold"
-          onClick={(event) => handleClickTab(event, '/exchange')}
+          onClick={(event) => handleClickTab(event, '/download')}
         >
-          <FaExchangeAlt className="mr-5 text-3xl" />
-          <span>Exchange</span>
+          <IoIosCloudDownload className="mr-5 text-3xl" />
+          <span>Download</span>
         </button>
 
         <button
@@ -69,6 +71,13 @@ function SideNav(): JSX.Element {
           <span>Settings</span>
         </button>
       </div>
+      <button
+        className="flex items-center px-6 py-2 w-11/12 hover:bg-[#9db6b6] ml-1 rounded-lg font-semibold mt-20"
+        onClick={(event) => handleClickTab(event, '/')}
+      >
+        <IoIosLogOut className="mr-5 text-3xl" />
+        <span>Logout</span>
+      </button>
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef } from 'react'
 import SideNav from './SideNav'
 // import Navbar from './NavBar'
 import {
@@ -19,7 +19,7 @@ type fileType = {
   cost: number
 }
 
-function Home(): JSX.Element {
+function Upload(): JSX.Element {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const { totalFiles, totalBytes, allFiles, viewFiles, search } = React.useContext(AppContext)
@@ -29,6 +29,13 @@ function Home(): JSX.Element {
   const [listOfFiles, setListOfFiles] = allFiles
   const [filesToView, setFilesToView] = viewFiles
   const [searchHash, setSearchHash] = search
+
+  const [fileQueue, setfileQueue] = useState<fileType[]>([])
+  const [fileQueueIndex, setFileQueueIndex] = useState<number>(0)
+  const [showCostModal, setShowCostModal] = useState(false)
+  const [fileCost, setFileCost] = useState<number>(0)
+  const [byteCount, setByteCount] = useState<number>(0)
+  const [fileCount, setFileCount] = useState<number>(0)
 
   const getFileIcon = (fileName: string) => {
     const fileType = fileName.split('.').pop()
@@ -82,12 +89,13 @@ function Home(): JSX.Element {
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const filesArr = Array.from(e.target.files)
-      let fileCount: number = 0
-      let byteCount: number = 0
-      let filesToAppend: fileType[] = listOfFiles
+      let countFile: number = 0
+      let countByte: number = 0
+      // let filesToAppend: fileType[] = listOfFiles
+      let filesToAppend: fileType[] = []
       filesArr.forEach((file) => {
-        byteCount += file.size / 1e6
-        fileCount++
+        countByte += file.size / 1e6
+        countFile++
         let newFile: fileType = {
           cid: generateRandom10DigitNumber(),
           name: file.name,
@@ -96,10 +104,11 @@ function Home(): JSX.Element {
         }
         filesToAppend.push(newFile)
       })
-      setNumBytes((prevBytes: number) => prevBytes + byteCount)
-      setNumFiles((prevFiles: number) => prevFiles + fileCount)
-      setListOfFiles(() => filesToAppend)
-      setFilesToView(() => filesToAppend)
+      setFileCount(countFile)
+      setByteCount(countByte)
+
+      setfileQueue(filesToAppend)
+      setShowCostModal(true)
     }
   }
 
@@ -109,15 +118,50 @@ function Home(): JSX.Element {
 
   const handleRemoveFile = (file: fileType) => {
     let newByteSize = numBytes - file.size
+    console.log(numBytes, file.size, newByteSize)
     setNumBytes(() => (newByteSize === 0 ? 0 : newByteSize))
     setNumFiles((prevFiles: number) => prevFiles - 1)
     let fileIndex = listOfFiles.indexOf(file)
-    console.log(fileIndex)
     let newFileList = listOfFiles
     newFileList.splice(fileIndex, 1)
-    console.log(newFileList)
     setListOfFiles(() => newFileList)
     setFilesToView(() => newFileList)
+  }
+
+  const handleCostConfirm = () => {
+    let idx: number = fileQueueIndex
+    fileQueue[idx].cost = fileCost
+    setFileQueueIndex(idx + 1)
+
+    if (idx + 1 === fileQueue.length) {
+      setNumBytes((prevBytes: number) => prevBytes + byteCount)
+      setNumFiles((prevFiles: number) => prevFiles + fileCount)
+      setListOfFiles((prevList: fileType[]) => prevList.concat(fileQueue))
+      setFilesToView((prevList: fileType[]) => prevList.concat(fileQueue))
+
+      handleCostCancelAll()
+    }
+
+    setFileCost(0)
+  }
+
+  const handleCostCancelAll = () => {
+    setFileCount(0)
+    setByteCount(0)
+    setFileQueueIndex(0)
+    setfileQueue([])
+    setShowCostModal(false)
+    setFileCost(0)
+  }
+
+  const handleCostCancelOne = () => {
+    setFileCount((prevCount) => prevCount - 1)
+    let currFileSize = fileQueue[fileQueueIndex].size
+    setByteCount((prevCount) => prevCount - currFileSize)
+    let queue = fileQueue
+    queue.splice(fileQueueIndex, 1)
+    setfileQueue(() => queue)
+    setFileCost(0)
   }
 
   return (
@@ -137,11 +181,19 @@ function Home(): JSX.Element {
             </div>
             <div className="flex-1 text-center">
               <h3 className="font-bold">Total Bytes</h3>
-              <p className="text-lg">{numBytes === 0 ? '0 MB' : numBytes.toFixed(6) + ' MB'}</p>
+              <p className="text-lg">
+                {Math.round(numBytes * 1e6) / 1e6 === 0
+                  ? '0 MB'
+                  : numBytes.toLocaleString(undefined, {
+                      minimumFractionDigits: 0,
+                      maximumFractionDigits: 4
+                    }) + ' MB'}
+              </p>
             </div>
           </div>
         </div>
 
+        <h1 className="text-xl font-bold mb-4">Uploaded Files</h1>
         <div className="flex justify-between mb-4">
           <div className="flex w-2/3">
             <input
@@ -207,7 +259,13 @@ function Home(): JSX.Element {
                 <span className="block text-gray-500">{file.cid}</span>{' '}
               </div>
             </div>
-            <span className="flex-1 text-left">{file.size.toFixed(4)} MB</span>
+            <span className="flex-1 text-left">
+              {file.size.toLocaleString(undefined, {
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 6
+              })}{' '}
+              MB
+            </span>
             <span className="flex-1 text-left flex justify-between items-center">
               <span>{file.cost} SWE</span>
               <button
@@ -219,9 +277,47 @@ function Home(): JSX.Element {
             </span>
           </div>
         ))}
+
+        {showCostModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center">
+            <div className="bg-white p-6 rounded-lg shadow-lg w-1/3">
+              <h2 className="text-l font-bold mb-4">
+                ({fileQueueIndex + 1}/{fileQueue.length}) Set Cost For:{' '}
+                {fileQueue[fileQueueIndex].name}
+              </h2>
+              <input
+                type="number"
+                value={fileCost}
+                onChange={(e) => setFileCost(parseFloat(e.target.value))}
+                placeholder="Enter cost in SWE"
+                className="border border-gray-300 rounded-lg p-2 w-full mb-4"
+              />
+              <div className="flex justify-end">
+                <button
+                  onClick={handleCostCancelAll}
+                  className="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded-lg mr-2"
+                >
+                  Cancel All
+                </button>
+                <button
+                  onClick={handleCostCancelOne}
+                  className="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded-lg mr-2"
+                >
+                  Skip File
+                </button>
+                <button
+                  onClick={handleCostConfirm}
+                  className="bg-[#737fa3] hover:bg-[#7c85a3] text-white px-4 py-2 rounded-lg"
+                >
+                  Confirm Cost
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
 }
 
-export default Home
+export default Upload

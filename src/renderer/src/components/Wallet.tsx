@@ -1,7 +1,15 @@
 import SideNav from './SideNav'
 import { FaRegClipboard } from 'react-icons/fa'
 import NavBar from './NavBar'
+import React from 'react'
+import { AppContext } from '../AppContext'
+
 function Wallet(): JSX.Element {
+  const { user, balance } = React.useContext(AppContext)
+
+  const [walletAddress, setWalletAddress] = user
+  const [walletBalance, setWalletBalance] = balance
+
   const handleCopyToClipboard = () => {
     navigator.clipboard
       .writeText('hello')
@@ -24,7 +32,7 @@ function Wallet(): JSX.Element {
         <div className="flex justify-between mb-16">
           <div className="bg-white p-4 rounded-lg shadow-md w-1/2">
             <div className="flex items-center mb-3">
-              <h2 className="text-xl font-semibold">Wallet ID: testingtesting</h2>
+              <h2 className="text-xl font-semibold">Wallet ID: {walletAddress}</h2>
               <button
                 onClick={handleCopyToClipboard}
                 className="ml-2 p-1 hover:bg-gray-200 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -35,7 +43,7 @@ function Wallet(): JSX.Element {
             </div>
             <div className="flex-1 text-left">
               <h2 className="font-bold">Current Balance</h2>
-              <p className="text-lg">0 BTC</p>
+              <p className="text-lg">{walletBalance} SWE</p>
             </div>
           </div>
         </div>
