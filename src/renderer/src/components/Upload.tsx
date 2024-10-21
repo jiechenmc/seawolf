@@ -142,21 +142,16 @@ function Upload(): JSX.Element {
       setListOfFiles((prevList: fileType[]) => prevList.concat(fileQueue))
       setFilesToView((prevList: fileType[]) => prevList.concat(fileQueue))
 
-      console.log('before here')
+      setHistoryView((prevView) => {
+        const newHistory = fileQueue.map((file) => ({
+          date: new Date(),
+          file: file,
+          type: 'uploaded',
+          proxy: 'self'
+        }))
 
-      // setHistoryView((prevView) => {
-      //   console.log('here')
-      //   fileQueue.forEach((file) => {
-      //     prevView.unshift({
-      //       date: new Date(),
-      //       file: file,
-      //       type: 'uploaded',
-      //       proxy: 'self'
-      //     })
-      //   })
-      // })
-
-      console.log(historyView)
+        return [...newHistory, ...prevView]
+      })
 
       handleCostCancelAll()
     }
