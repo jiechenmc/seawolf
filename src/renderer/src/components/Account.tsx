@@ -109,7 +109,7 @@ function Account(): JSX.Element {
               >
                 <span className="flex-1 ">{formatDateTime(historyItem.date)}</span>
                 <div className="flex flex-1 items-center">
-                  <div className="ml-2">
+                  <div>
                     <span className="block font-semibold">{historyItem.file.name}</span>
                     <span className="block text-gray-500">{historyItem.file.cid}</span>{' '}
                   </div>

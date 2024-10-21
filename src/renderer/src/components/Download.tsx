@@ -24,10 +24,11 @@ const testDB: fileType[] = [
 function Download(): JSX.Element {
   const [searchHash, setSearchHash] = useState<string>('')
 
-  const { proxy, balance, downloadFiles } = React.useContext(AppContext)
+  const { proxy, balance, downloadFiles, history } = React.useContext(AppContext)
   const [currProxy, setCurrProxy] = proxy
   const [walletBalance, setWalletBalance] = balance
   const [downloadedFiles, setDownloadedFiles] = downloadFiles
+  const [, setHistoryView] = history
 
   const handleSearchFile = () => {
     const found = testDB.find((file) => file.cid === Number(searchHash))
@@ -50,6 +51,19 @@ function Download(): JSX.Element {
           }
           downloadedFiles.unshift(newFileDownloaded)
           setDownloadedFiles(downloadedFiles)
+
+          setHistoryView((prevView) => {
+            const newHistory = [
+              {
+                date: new Date(),
+                file: newFileDownloaded.file,
+                type: 'downloaded',
+                proxy: currProxy ? currProxy.ip : 'self'
+              }
+            ]
+
+            return [...newHistory, ...prevView]
+          })
         }
       }
     } else {
