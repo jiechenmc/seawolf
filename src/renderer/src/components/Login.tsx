@@ -31,14 +31,14 @@ function Login(): JSX.Element {
         <form onSubmit={handleSubmit} className="space-y-6">
           <input
             type="text"
-            placeholder="Wallet Address"
+            placeholder="Username"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-md"
           />
           <input
             type="password"
-            placeholder="Private Key"
+            placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-md"

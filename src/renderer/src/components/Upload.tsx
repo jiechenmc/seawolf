@@ -302,7 +302,14 @@ function Upload(): JSX.Element {
               <input
                 type="number"
                 value={fileCost}
-                onChange={(e) => setFileCost(parseFloat(e.target.value))}
+                onChange={(e) => {
+                  const newValue = parseFloat(e.target.value)
+                  if (newValue < 0) {
+                    setFileCost(0)
+                  } else {
+                    setFileCost(newValue)
+                  }
+                }}
                 placeholder="Enter cost in SWE"
                 className="border border-gray-300 rounded-lg p-2 w-full mb-4"
               />
