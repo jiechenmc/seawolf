@@ -11,6 +11,7 @@ import (
     "strconv"
     "strings"
     "encoding/binary"
+    "path/filepath"
     "github.com/libp2p/go-libp2p/core/host"
     "github.com/libp2p/go-libp2p/core/peer"
     "github.com/libp2p/go-libp2p/core/network"
@@ -34,14 +35,11 @@ const fileShareWantTimeout = time.Second * 5
 const fileShareFindProvidersTimeout = time.Second * 1
 const fileShareIdleTimeout = time.Second * 60
 
+var nextSessionIDLock sync.Mutex
+var nextSessionID = 0
 var chunkSize = 256 * 1024
 var dagMaxChildren = 10
 var comboService *dag.ComboService = nil
-
-type Provider struct {
-    PeerID peer.ID          `json:"peer_id"`
-    PricePerByte float64    `json:"price_per_byte"`
-}
 
 type FileShareNode struct {
     Host host.Host
@@ -50,6 +48,7 @@ type FileShareNode struct {
 }
 
 type FileShareSession struct {
+    SessionID int
     Node *FileShareNode
     StreamMap map[peer.ID]P2PStream
     BytesMap map[peer.ID]int
@@ -61,54 +60,34 @@ type FileShareSession struct {
 
 type RootBlock struct {
     Size uint64             `json:"size"`
-    BytePrice float64       `json:"price_per_byte"`
-    Owner peer.ID           `json:"owner_peer_id"`
+    Price float64           `json:"price"`
     Name string             `json:"name"`
 }
 
 func (r *RootBlock) Marshal() ([]byte, error) {
-    ownerBytes, err := r.Owner.MarshalBinary()
-    if err != nil {
-        log.Printf("Attempted to marshal invalid peer ID %v. %v\n", r.Owner, err)
-        return nil, internalError
-    }
-    var ownerBytesLen uint8
     var nameByteLen uint8
-    if len(ownerBytes) > 255 {
-        return nil, invalidParams
-    } else {
-        ownerBytesLen = uint8(len(ownerBytes))
-    }
     if len(r.Name) > 255 {
         return nil, invalidParams
     } else {
         nameByteLen = uint8(len(r.Name))
     }
-    bytes := make([]byte, 0, 8 + 8 + 1 + 1 + len(ownerBytes) + len(r.Name))
+    bytes := make([]byte, 0, 8 + 8 + 1 + len(r.Name))
     bytes, _ = binary.Append(bytes, binary.BigEndian, r.Size)
-    bytes, _ = binary.Append(bytes, binary.BigEndian, r.BytePrice)
-    bytes, _ = binary.Append(bytes, binary.BigEndian, ownerBytesLen)
+    bytes, _ = binary.Append(bytes, binary.BigEndian, r.Price)
     bytes, _ = binary.Append(bytes, binary.BigEndian, nameByteLen)
-    bytes, _ = binary.Append(bytes, binary.BigEndian, ownerBytes)
     bytes, _ = binary.Append(bytes, binary.BigEndian, []byte(r.Name))
     return bytes, nil
 }
 
 func (r *RootBlock) Unmarshal(bytes []byte) error {
-    var ownerBytesLen uint8
     var nameByteLen uint8
-    var ownerBytes []byte
 
     buf := libbytes.NewReader(bytes)
     err := binary.Read(buf, binary.BigEndian, &r.Size)
     if err != nil {
         return invalidParams
     }
-    err = binary.Read(buf, binary.BigEndian, &r.BytePrice)
-    if err != nil {
-        return invalidParams
-    }
-    err = binary.Read(buf, binary.BigEndian, &ownerBytesLen)
+    err = binary.Read(buf, binary.BigEndian, &r.Price)
     if err != nil {
         return invalidParams
     }
@@ -116,15 +95,10 @@ func (r *RootBlock) Unmarshal(bytes []byte) error {
     if err != nil {
         return invalidParams
     }
-    if ownerBytesLen == 0 || nameByteLen == 0 || len(bytes) < 8 + 8 + 1 + 1 + int(ownerBytesLen) + int(nameByteLen) {
+    if nameByteLen == 0 || len(bytes) < 8 + 8 + 1 + int(nameByteLen) {
         return invalidParams
     }
-    ownerBytes = bytes[18:18 + ownerBytesLen]
-    err = r.Owner.UnmarshalBinary(ownerBytes)
-    if err != nil {
-        return invalidParams
-    }
-    r.Name = string(bytes[18 + ownerBytesLen:18 + ownerBytesLen + nameByteLen])
+    r.Name = string(bytes[17:17 + nameByteLen])
     return nil
 }
 
@@ -249,7 +223,13 @@ Failed:
 }
 
 func fileShareSessionCreate(ctx context.Context, node *FileShareNode) *FileShareSession {
+    nextSessionIDLock.Lock()
+    sessionID := nextSessionID
+    nextSessionID++
+    nextSessionIDLock.Unlock()
+
     return &FileShareSession {
+        SessionID: sessionID,
         Node: node,
         StreamMap: make(map[peer.ID]P2PStream),
         BytesMap: make(map[peer.ID]int),
@@ -511,10 +491,25 @@ func (s *FileShareSession) GetCids(reqCids []cid.Cid) ([][]byte, error) {
     return results, nil
 }
 
-func (f *FileShareNode) GetFile(ctx context.Context, rootCid string, outputFile string) error {
-    root, err := cid.Decode(rootCid)
+func (s *FileShareSession) GetCidFromProvider(providerID peer.ID, reqCid cid.Cid) []byte {
+    data := s.SendWant(providerID, reqCid)
+    if data != nil {
+        //Successfully obtained data
+        return data
+    }
+    return nil
+}
+
+func (f *FileShareNode) GetFile(ctx context.Context, providerIDStr string, rootCidStr string, outputFile string) error {
+    rootCid, err := cid.Decode(rootCidStr)
     if err != nil {
         log.Printf("Failed to decode cid %v. %v", rootCid, err)
+        return invalidParams
+    }
+
+    providerID, err := peer.Decode(providerIDStr)
+    if err != nil {
+        log.Printf("Failed to decode provider ID string '%v'. %v\n", providerIDStr, err)
         return invalidParams
     }
 
@@ -529,36 +524,58 @@ func (f *FileShareNode) GetFile(ctx context.Context, rootCid string, outputFile 
 
     //Create a fileshare session
     session := fileShareSessionCreate(ctx, f)
+    var bytes []byte
 
-    var bytes [][]byte
-
-    //Check local blockstore before asking peers
-    has, err := f.bstore.Has(ctx, root)
-    if err != nil {
-        return internalError
-    }
-    if has {
-        block, err := f.bstore.Get(ctx, root)
+    isRoot := true
+    reqCid := rootCid
+    for {
+        //Check local blockstore before asking peers
+        has, err := f.bstore.Has(ctx, reqCid)
         if err != nil {
             return internalError
         }
-        bytes = append(bytes, block.RawData())
-    } else {
-        //For simplicity, file is just one block
-        bytes, err = session.GetCids([]cid.Cid{root})
+        if has {
+            block, err := f.bstore.Get(ctx, reqCid)
+            if err != nil {
+                return internalError
+            }
+            bytes = block.RawData()
+        } else {
+            //For simplicity, file is just one block
+            bytes = session.GetCidFromProvider(providerID, reqCid)
+            if bytes == nil {
+                log.Printf("Failed to get file.\n")
+                return internalError
+            }
+        }
+
+        protoNode, err := dag.DecodeProtobuf(bytes)
         if err != nil {
+            log.Printf("Failed to parse bytes from provider. \n")
             return internalError
         }
-    }
+        if isRoot {
+            //Get metadata and price
+            rootBlock := &RootBlock{}
+            rootBlock.Unmarshal(protoNode.Data())
 
-    pbNode := pb.PBNode{}
-    if bytes[0] == nil {
-        log.Printf("Failed to get file.\n")
-        return internalError
-    }
-    err = pbNode.Unmarshal(bytes[0])
+            log.Printf("%v\n", *rootBlock)
 
-    file.Write(pbNode.Data)
+            //Do things with data
+            isRoot = false
+
+            links := protoNode.Links()
+            if len(links) == 1 {
+                reqCid = links[0].Cid
+            } else {
+                log.Printf("Unexpected links from node. \n")
+                return internalError
+            }
+        } else {
+            file.Write(protoNode.Data())
+            break
+        }
+    }
     
     file.Close()
     err = os.Rename(outputFile + ".tmp", outputFile)
@@ -569,7 +586,7 @@ func (f *FileShareNode) GetFile(ctx context.Context, rootCid string, outputFile 
     return nil
 }
 
-func (f *FileShareNode) PutFile(ctx context.Context, inputFile string) (cid.Cid, error) {
+func (f *FileShareNode) PutFile(ctx context.Context, inputFile string, price float64) (cid.Cid, error) {
     //Open input file for reading
     file, err := os.OpenFile(inputFile, os.O_RDONLY, 0644)
     if err != nil {
@@ -597,15 +614,34 @@ func (f *FileShareNode) PutFile(ctx context.Context, inputFile string) (cid.Cid,
         bytesRead += n
     }
 
+    //Create root node for metadata
+    rootBlock := &RootBlock{ Size: uint64(bytesRead), Price: price, Name: filepath.Base(inputFile) }
+    rootBlockBytes, err := rootBlock.Marshal()
+    if err != nil {
+        log.Printf("Failed to marshal root block. %v \n", err)
+        return cid.Cid{}, nil
+    }
+    rootNode := dag.NodeWithData(rootBlockBytes)
+
+    //Create data node and link it with root node
     node := dag.NodeWithData(buffer).Copy()
+    rootNode.AddNodeLink("data", node)
+
     f.bstore.Put(ctx, node)
+    f.bstore.Put(ctx, rootNode.Copy())
+
     err = f.DHT.Provide(ctx, node.Cid(), true)
     if err != nil {
         log.Printf("Failed to provide cid. %v\n", err)
-        return node.Cid(), nil
+        return rootNode.Cid(), nil
+    }
+    err = f.DHT.Provide(ctx, rootNode.Cid(), true)
+    if err != nil {
+        log.Printf("Failed to provide cid. %v\n", err)
+        return rootNode.Cid(), nil
     }
 
-    return node.Cid(), nil
+    return rootNode.Cid(), nil
 }
 
 func bitswapCreate(ctx context.Context, node host.Host, kadDHT *dht.IpfsDHT) (*bitswap.Bitswap, *blockstore.Blockstore) {

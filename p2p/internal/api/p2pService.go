@@ -269,26 +269,26 @@ func (s *P2PService) AddWallet(password string, rpcUsername string, rpcPassword 
     //Query local btcwallet daemon to ensure rpcUsername and rpcPassword are valid
 }
 
-func (s *P2PService) PutFile(inputFile string) (string, error) {
+func (s *P2PService) PutFile(inputFile string, price float64) (string, error) {
     if s.username == nil || s.exchange == nil {
         log.Printf("Attempted to put file when not logged in\n")
         return "", notLoggedIn
     }
     // cid, err := bitswapPutFile(context.Background(), s.exchange, s.bstore, inputFile)
-    cid, err := s.fsNode.PutFile(context.Background(), inputFile)
+    cid, err := s.fsNode.PutFile(context.Background(), inputFile, price)
     if err != nil {
         return "", err
     }
     return cid.String(), nil
 }
 
-func (s *P2PService) GetFile(cid string, outputFile string) (string, error) {
+func (s *P2PService) GetFile(providerID string, cid string, outputFile string) (string, error) {
     if s.username == nil || s.exchange == nil {
         log.Printf("Attempted to put file when not logged in\n")
         return "", notLoggedIn
     }
     // err := bitswapGetFile(context.Background(), s.exchange, s.bstore, cid, outputFile)
-    err := s.fsNode.GetFile(context.Background(), cid, outputFile)
+    err := s.fsNode.GetFile(context.Background(), providerID, cid, outputFile)
     if err != nil {
         return "", err
     }
