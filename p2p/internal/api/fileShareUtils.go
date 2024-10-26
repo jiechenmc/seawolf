@@ -45,17 +45,40 @@ type FileShareNode struct {
     Host host.Host
     DHT *dht.IpfsDHT
     bstore blockstore.Blockstore
+    fstore map[cid.Cid]dag.ProtoNode
+    sessionStore map[int]*FileShareSession
+    rSessionStore map[peer.ID]map[int]*FileShareRemoteSession
+    fstoreLock sync.Mutex
+    sessionStoreLock sync.Mutex
+    rSessionStoreLock sync.Mutex
+}
+
+type Pausable struct {
+    pauseLock sync.Mutex
+    paused int
+    resumeChannel chan bool
 }
 
 type FileShareSession struct {
-    SessionID int
-    Node *FileShareNode
-    StreamMap map[peer.ID]P2PStream
-    BytesMap map[peer.ID]int
-    HavesMap map[cid.Cid][]peer.ID
+    sessionID int
+    node *FileShareNode
+    streamMap map[peer.ID]P2PStream
     streamLock sync.Mutex
-    havesLock sync.Mutex
+    reqCid cid.Cid
+    rxBytesLock sync.Mutex
+    rxBytes uint64
+    pausable *Pausable
     sessionContext context.Context
+    complete bool
+    result int
+}
+
+type FileShareRemoteSession struct {
+    remoteSessionID int
+    remotePeerID peer.ID
+    txBytesLock sync.Mutex
+    txBytes uint64
+    pausable *Pausable
 }
 
 type RootBlock struct {
@@ -102,6 +125,46 @@ func (r *RootBlock) Unmarshal(bytes []byte) error {
     return nil
 }
 
+func NewPausable() *Pausable {
+    return &Pausable{
+        pauseLock: sync.Mutex{},
+        paused: 0,
+        resumeChannel: make(chan bool, 0),
+    }
+}
+
+func (p *Pausable) Pause() {
+    p.pauseLock.Lock()
+    if p.paused == 0 {
+        p.paused = 1
+    }
+    p.pauseLock.Unlock()
+}
+
+func (p *Pausable) Resume() {
+    p.pauseLock.Lock()
+    if p.paused != 0 {
+        for ; p.paused > 1; {
+            p.resumeChannel <- true
+            p.paused --
+        }
+        p.paused = 0
+    }
+    p.pauseLock.Unlock()
+}
+
+func (p *Pausable) Wait() {
+    p.pauseLock.Lock()
+    if p.paused != 0 {
+        p.paused ++
+        p.pauseLock.Unlock()
+        //Wait for resume
+        <- p.resumeChannel
+    } else {
+        p.pauseLock.Unlock()
+    }
+}
+
 func FileShareNodeCreate(node host.Host, kadDHT *dht.IpfsDHT) *FileShareNode {
     //Create datastore
     ds := datastore.NewMapDatastore()
@@ -114,6 +177,12 @@ func FileShareNodeCreate(node host.Host, kadDHT *dht.IpfsDHT) *FileShareNode {
         Host: node,
         DHT: kadDHT,
         bstore: blkStore,
+        fstore: make(map[cid.Cid]dag.ProtoNode),
+        sessionStore: make(map[int]*FileShareSession),
+        rSessionStore: make(map[peer.ID]map[int]*FileShareRemoteSession),
+        fstoreLock: sync.Mutex{},
+        sessionStoreLock: sync.Mutex{},
+        rSessionStoreLock: sync.Mutex{},
     }
 
     node.SetStreamHandler(fileShareProtocol, func(s network.Stream) {
@@ -127,12 +196,27 @@ func FileShareNodeCreate(node host.Host, kadDHT *dht.IpfsDHT) *FileShareNode {
 
             switch req {
                 case "WANT HAVE\n":
-                    err = handleWantHave(context.Background(), stream, fsNode)
+                    err = fsNode.handleWantHave(context.Background(), stream)
                     if err != nil {
                         return
                     }
                 case "WANT\n":
-                    err = handleWant(context.Background(), stream, fsNode)
+                    err = fsNode.handleWant(context.Background(), stream)
+                    if err != nil {
+                        return
+                    }
+                case "WANT DATA\n":
+                    err = fsNode.handleWantData(context.Background(), stream)
+                    if err != nil {
+                        return
+                    }
+                case "PAUSE\n":
+                    err = fsNode.handlePause(stream)
+                    if err != nil {
+                        return
+                    }
+                case "RESUME\n":
+                    err = fsNode.handleResume(stream)
                     if err != nil {
                         return
                     }
@@ -145,7 +229,7 @@ func FileShareNodeCreate(node host.Host, kadDHT *dht.IpfsDHT) *FileShareNode {
     return fsNode
 }
 
-func handleWantHave(ctx context.Context, stream P2PStream, fsNode *FileShareNode) error {
+func (f *FileShareNode) handleWantHave(ctx context.Context, stream P2PStream) error {
     countStr, err := stream.ReadString('\n', fileShareWantHaveTimeout)
     if err != nil {
         return err
@@ -165,7 +249,7 @@ func handleWantHave(ctx context.Context, stream P2PStream, fsNode *FileShareNode
             return err
         }
         //Query local blockstore for cid
-        has, err := fsNode.bstore.Has(context.Background(), cid)
+        has, err := f.bstore.Has(ctx, cid)
         if err != nil {
             return err
         }
@@ -185,7 +269,8 @@ func handleWantHave(ctx context.Context, stream P2PStream, fsNode *FileShareNode
     return err
 }
 
-func handleWant(ctx context.Context, stream P2PStream, fsNode *FileShareNode) error {
+func (f *FileShareNode) handleWant(ctx context.Context, stream P2PStream) error {
+    //Get requested CID
     cidStr, err := stream.ReadString('\n', fileShareWantTimeout)
     if err != nil {
         return err
@@ -194,10 +279,11 @@ func handleWant(ctx context.Context, stream P2PStream, fsNode *FileShareNode) er
     if err != nil {
         return err
     }
-    //Query local blockstore for cid
-    has, err := fsNode.bstore.Has(context.Background(), cid)
+
+    //Query local blockstore for CID
+    has, err := f.bstore.Has(ctx, cid)
     if err == nil && has {
-        block, err := fsNode.bstore.Get(context.Background(), cid)
+        block, err := f.bstore.Get(ctx, cid)
         if err != nil {
             goto Failed
         }
@@ -206,6 +292,7 @@ func handleWant(ctx context.Context, stream P2PStream, fsNode *FileShareNode) er
             goto Failed
         }
         rawData := node.RawData()
+
         err = stream.SendString(fmt.Sprintf("HERE\n%d\n", len(rawData)))
         if err != nil {
             return err
@@ -222,36 +309,223 @@ Failed:
     return nil
 }
 
-func fileShareSessionCreate(ctx context.Context, node *FileShareNode) *FileShareSession {
+func (f *FileShareNode) handleWantData(ctx context.Context, stream P2PStream) error {
+    remoteSessionIDStr, err := stream.ReadString('\n', fileShareWantTimeout)
+    if err != nil {
+        return err
+    }
+
+    //Get remote session ID
+    remoteSessionID, err := strconv.Atoi(remoteSessionIDStr[:len(remoteSessionIDStr) - 1])
+    if err != nil {
+        return err
+    }
+
+    //Get requested CID
+    cidStr, err := stream.ReadString('\n', fileShareWantTimeout)
+    if err != nil {
+        return err
+    }
+    cid, err := cid.Decode(cidStr[:len(cidStr) - 1])
+    if err != nil {
+        return err
+    }
+
+    //Query local blockstore for CID
+    has, err := f.bstore.Has(ctx, cid)
+    if err == nil && has {
+        block, err := f.bstore.Get(ctx, cid)
+        if err != nil {
+            goto Failed
+        }
+        node, err := dag.DecodeProtobuf(block.RawData())
+        if err != nil {
+            goto Failed
+        }
+        data := node.Data()
+
+        rSession := f.RemoteSessionCreate(stream.RemotePeerID, remoteSessionID)
+        defer f.RemoteSessionCleanup(rSession)
+
+        err = stream.SendString(fmt.Sprintf("HERE\n%d\n", len(data)))
+        if err != nil {
+            return err
+        }
+        //Send the data chunk by chunk
+        for byteOffset := 0; byteOffset < len(data); byteOffset += chunkSize {
+            //If paused, wait till resumed
+            rSession.pausable.Wait()
+
+            txBytes := 0
+            if (byteOffset + chunkSize) > len(data) {
+                err = stream.Send(data[byteOffset:])
+                txBytes += len(data) - byteOffset
+            } else {
+                err = stream.Send(data[byteOffset:byteOffset + chunkSize])
+                txBytes += chunkSize
+            }
+            if err != nil {
+                return err
+            }
+            rSession.txBytesLock.Lock()
+            rSession.txBytes += uint64(txBytes)
+            rSession.txBytesLock.Unlock()
+        }
+    }
+
+    return nil
+Failed:
+    stream.SendString("DON'T HAVE\n")
+    return nil
+}
+
+func (f *FileShareNode) handleResume(stream P2PStream) error {
+    remoteSessionIDStr, err := stream.ReadString('\n', fileShareWantTimeout)
+    if err != nil {
+        return err
+    }
+    //Get remote session ID
+    remoteSessionID, err := strconv.Atoi(remoteSessionIDStr[:len(remoteSessionIDStr) - 1])
+    if err != nil {
+        return err
+    }
+
+    //Query for remote session
+    f.rSessionStoreLock.Lock()
+    _, ok := f.rSessionStore[stream.RemotePeerID]
+    if !ok {
+        return remoteSessionNotFound
+    }
+    rSession, ok := f.rSessionStore[stream.RemotePeerID][remoteSessionID]
+    if !ok {
+        return remoteSessionNotFound
+    }
+    f.rSessionStoreLock.Unlock()
+
+    rSession.pausable.Resume()
+    return nil
+}
+
+func (f *FileShareNode) handlePause(stream P2PStream) error {
+    remoteSessionIDStr, err := stream.ReadString('\n', fileShareWantTimeout)
+    if err != nil {
+        return err
+    }
+    //Get remote session ID
+    remoteSessionID, err := strconv.Atoi(remoteSessionIDStr[:len(remoteSessionIDStr) - 1])
+    if err != nil {
+        return err
+    }
+
+    //Query for remote session
+    f.rSessionStoreLock.Lock()
+    _, ok := f.rSessionStore[stream.RemotePeerID]
+    if !ok {
+        return remoteSessionNotFound
+    }
+    rSession, ok := f.rSessionStore[stream.RemotePeerID][remoteSessionID]
+    if !ok {
+        return remoteSessionNotFound
+    }
+    f.rSessionStoreLock.Unlock()
+
+    rSession.pausable.Pause()
+    return nil
+}
+
+func (f *FileShareNode) SessionCreate(ctx context.Context, reqCid cid.Cid) *FileShareSession {
     nextSessionIDLock.Lock()
     sessionID := nextSessionID
     nextSessionID++
     nextSessionIDLock.Unlock()
 
-    return &FileShareSession {
-        SessionID: sessionID,
-        Node: node,
-        StreamMap: make(map[peer.ID]P2PStream),
-        BytesMap: make(map[peer.ID]int),
-        HavesMap: make(map[cid.Cid][]peer.ID),
+    fileShareSession := &FileShareSession {
+        sessionID: sessionID,
+        node: f,
+        streamMap: make(map[peer.ID]P2PStream),
         streamLock: sync.Mutex{},
-        havesLock: sync.Mutex{},
         sessionContext: ctx,
+        pausable: NewPausable(),
+        rxBytesLock: sync.Mutex{},
+        rxBytes: uint64(0),
     }
+
+    f.sessionStoreLock.Lock()
+    f.sessionStore[sessionID] = fileShareSession
+    f.sessionStoreLock.Unlock()
+
+    return fileShareSession
+}
+
+func (f *FileShareNode) SessionCleanup(session *FileShareSession, result int) {
+    session.complete = true
+    session.result = result
+}
+
+func (f *FileShareNode) RemoteSessionCreate(remotePeerID peer.ID, remoteSessionID int) *FileShareRemoteSession {
+    //If a remote session already exists, use it
+    f.rSessionStoreLock.Lock()
+    _, ok := f.rSessionStore[remotePeerID]
+    if !ok {
+        f.rSessionStore[remotePeerID] = make(map[int]*FileShareRemoteSession)
+    }
+    rSession, ok := f.rSessionStore[remotePeerID][remoteSessionID]
+    if !ok {
+        rSession = &FileShareRemoteSession{
+            remoteSessionID: remoteSessionID,
+            remotePeerID: remotePeerID,
+            pausable: NewPausable(),
+            txBytesLock: sync.Mutex{},
+            txBytes: uint64(0),
+        }
+        f.rSessionStore[remotePeerID][remoteSessionID] = rSession
+    }
+    f.rSessionStoreLock.Unlock()
+    return rSession
+}
+
+func (f *FileShareNode) RemoteSessionCleanup(remoteSession *FileShareRemoteSession) {
+    f.rSessionStoreLock.Lock()
+    defer f.rSessionStoreLock.Unlock()
+    delete(f.rSessionStore[remoteSession.remotePeerID], remoteSession.remoteSessionID)
+}
+
+func (f *FileShareNode) PauseSession(sessionID int) error {
+    f.sessionStoreLock.Lock()
+    session, ok := f.sessionStore[sessionID]
+    if !ok {
+        return sessionNotFound
+    }
+    f.sessionStoreLock.Unlock()
+
+    session.pausable.Pause()
+    return nil
+}
+
+func (f *FileShareNode) ResumeSession(sessionID int) error {
+    f.sessionStoreLock.Lock()
+    session, ok := f.sessionStore[sessionID]
+    if !ok {
+        return sessionNotFound
+    }
+    f.sessionStoreLock.Unlock()
+
+    session.pausable.Resume()
+    return nil
 }
 
 func (s *FileShareSession) GetStream(peerID peer.ID) (P2PStream, error) {
     s.streamLock.Lock()
-    stream, ok := s.StreamMap[peerID]
+    stream, ok := s.streamMap[peerID]
     s.streamLock.Unlock()
     if !ok {
-        newStream, err := p2pOpenStream(s.sessionContext, fileShareProtocol, s.Node.Host, peerID.String())
+        newStream, err := p2pOpenStream(s.sessionContext, fileShareProtocol, s.node.Host, peerID.String())
         if err == nil {
             s.streamLock.Lock()
             //If stream was created while we were attempting to create a new one, discard new stream
-            stream, ok := s.StreamMap[peerID]
+            stream, ok := s.streamMap[peerID]
             if !ok {
-                s.StreamMap[peerID] = newStream
+                s.streamMap[peerID] = newStream
                 stream = newStream
             } else {
                 newStream.Close()
@@ -267,10 +541,10 @@ func (s *FileShareSession) GetStream(peerID peer.ID) (P2PStream, error) {
 
 func (s *FileShareSession) DeleteStream(peerID peer.ID) {
     s.streamLock.Lock()
-    stream, ok := s.StreamMap[peerID]
+    stream, ok := s.streamMap[peerID]
     if ok {
         stream.Close()
-        delete(s.StreamMap, peerID)
+        delete(s.streamMap, peerID)
     }
     s.streamLock.Unlock()
 }
@@ -403,114 +677,69 @@ func (s *FileShareSession) SendWant(peerID peer.ID, c cid.Cid) []byte {
     return nil
 }
 
-func (s *FileShareSession) CreateKnownPeerStreams() {
-    p2pHost := s.Node.Host
-    peerIDs := p2pHost.Peerstore().Peers()
-    wg := sync.WaitGroup{}
-    wg.Add(len(peerIDs))
-    //Iterate through node's known peers and get stream
-    for _, peerID := range peerIDs {
-        go func(peerID peer.ID) {
-            if peerID != p2pHost.ID() {
-                //Don't care about errors
-                s.GetStream(peerID)
-            }
-            wg.Done()
-        }(peerID)
+func (s *FileShareSession) SendWantData(peerID peer.ID, c cid.Cid) chan []byte {
+    //Send WANT DATA request
+    err := s.sendString(peerID, fmt.Sprintf("WANT DATA\n%s\n%s\n", s.sessionID, c.String()))
+    if err != nil {
+        return nil
     }
-    wg.Wait()
-}
 
-func (s *FileShareSession) GetCids(reqCids []cid.Cid) ([][]byte, error) {
-    //Initialize streams with peers we know
-    s.CreateKnownPeerStreams()
-    wg := sync.WaitGroup{}
-    wg.Add(len(s.StreamMap))
-    for peerID, stream := range s.StreamMap {
-        go func(peerID peer.ID, stream P2PStream) {
-            peerCids := s.SendWantHave(peerID, reqCids)
-            if peerCids != nil {
-                //Sanity/safety check to make sure the cid sent by peer is actually in reqCids
-                validCids := make([]cid.Cid, 0, len(peerCids))
-                for _, c := range peerCids {
-                    for _, reqCid := range reqCids {
-                        if reqCid == c {
-                            validCids = append(validCids, c)
-                        }
-                    }
-                }
-                s.havesLock.Lock()
-                for _, c := range peerCids {
-                    peerIDs, ok := s.HavesMap[c]
-                    if !ok {
-                        peerIDs = []peer.ID{}
-                        s.HavesMap[c] = peerIDs
-                    }
-                    s.HavesMap[c] = append(peerIDs, peerID)
-                }
-                s.havesLock.Unlock()
-            }
-            wg.Done()
-        }(peerID, stream)
+    //Wait for response
+    resp, err := s.readString(peerID, '\n', fileShareWantTimeout)
+    if err != nil {
+        return nil
     }
-    //Wait until we've populate HAVEs from direct peers
-    wg.Wait()
-    results := make([][]byte, len(reqCids))
-    wg.Add(len(reqCids))
-    //Now that we have the 'haves' list, we send wants in addition to querys the DHT for providers for missing CIDs
-    for i, reqCid := range reqCids {
-        go func(i int, reqCid cid.Cid) {
-            defer wg.Done()
-            peerIDs, ok := s.HavesMap[reqCid]
-            if !ok {
-                ctxTimeout, cancel := context.WithTimeout(s.sessionContext, time.Second * fileShareFindProvidersTimeout)
-                peerAddrInfos, err := s.Node.DHT.FindProviders(ctxTimeout, reqCid)
-                cancel()
+
+    //Response of the form HERE\n<size>\n<byte><byte>...
+    if resp == "HERE\n" {
+        sizeStr, err := s.readString(peerID, '\n', fileShareWantHaveTimeout)
+        if err != nil {
+            return nil
+        }
+        size, err := strconv.Atoi(sizeStr[:len(sizeStr) - 1])
+        if err != nil {
+            return nil
+        }
+        dataChannel := make(chan []byte)
+        var chunkData []byte
+        go func() {
+            for byteOffset := 0; byteOffset < size; byteOffset += chunkSize {
+                //If paused wait till resumed
+                s.pausable.Wait()
+
+                if size - byteOffset < chunkSize {
+                    chunkData, err = s.read(peerID, chunkSize, fileShareWantHaveTimeout)
+                } else {
+                    chunkData, err = s.read(peerID, size - byteOffset, fileShareWantHaveTimeout)
+                }
                 if err != nil {
-                    results[i] = nil
+                    close(dataChannel)
                     return
                 }
-                peerIDs = make([]peer.ID, len(peerAddrInfos))
-                for j, addrInfo := range peerAddrInfos {
-                    peerIDs[j] = addrInfo.ID
-                }
+                dataChannel <- chunkData
+                s.rxBytesLock.Lock()
+                s.rxBytes += uint64(len(chunkData))
+                log.Printf("Total rx: %v bytes", s.rxBytes)
+                s.rxBytesLock.Unlock()
             }
-            //Send WANTs to peers
-            for _, peerID := range peerIDs {
-                data := s.SendWant(peerID, reqCid)
-                if data != nil {
-                    //Successfully obtained data
-                    results[i] = data
-                    return
-                }
-                results[i] = nil
-            }
-        }(i, reqCid)
-    }
-    wg.Wait()
-    return results, nil
-}
-
-func (s *FileShareSession) GetCidFromProvider(providerID peer.ID, reqCid cid.Cid) []byte {
-    data := s.SendWant(providerID, reqCid)
-    if data != nil {
-        //Successfully obtained data
-        return data
+            close(dataChannel)
+        }()
+        return dataChannel
     }
     return nil
 }
 
-func (f *FileShareNode) GetFile(ctx context.Context, providerIDStr string, rootCidStr string, outputFile string) error {
+func (f *FileShareNode) GetFile(ctx context.Context, providerIDStr string, rootCidStr string, outputFile string) (int, error) {
     rootCid, err := cid.Decode(rootCidStr)
     if err != nil {
         log.Printf("Failed to decode cid %v. %v", rootCid, err)
-        return invalidParams
+        return -1, invalidParams
     }
 
     providerID, err := peer.Decode(providerIDStr)
     if err != nil {
         log.Printf("Failed to decode provider ID string '%v'. %v\n", providerIDStr, err)
-        return invalidParams
+        return -1, invalidParams
     }
 
     tmpOutputFile := outputFile + ".tmp"
@@ -519,71 +748,101 @@ func (f *FileShareNode) GetFile(ctx context.Context, providerIDStr string, rootC
     file, err := os.Create(tmpOutputFile)
     if err != nil {
         log.Printf("Error opening file: %v. %v\n", tmpOutputFile, err)
-        return internalError
+        return -1, failedToOpenFile
     }
-
+    deferCleanup := true
     //Create a fileshare session
-    session := fileShareSessionCreate(ctx, f)
+    session := f.SessionCreate(ctx, rootCid)
+    defer func() {
+        if deferCleanup {
+            file.Close()
+            f.SessionCleanup(session, 1)
+        }
+    }()
+
     var bytes []byte
+    var dataChannel chan []byte
 
     isRoot := true
     reqCid := rootCid
+    rootBlock := &RootBlock{}
     for {
         //Check local blockstore before asking peers
         has, err := f.bstore.Has(ctx, reqCid)
         if err != nil {
-            return internalError
+            return -1, internalError
         }
         if has {
             block, err := f.bstore.Get(ctx, reqCid)
             if err != nil {
-                return internalError
+                return -1, internalError
             }
             bytes = block.RawData()
+            if !isRoot {
+                dataChannel <- bytes
+                close(dataChannel)
+            }
         } else {
-            //For simplicity, file is just one block
-            bytes = session.GetCidFromProvider(providerID, reqCid)
-            if bytes == nil {
-                log.Printf("Failed to get file.\n")
-                return internalError
+            if isRoot { 
+                bytes = session.SendWant(providerID, reqCid)
+                if bytes == nil {
+                    log.Printf("Failed to get file metadata.\n")
+                    return -1, internalError
+                }
+            } else {
+                dataChannel = session.SendWantData(providerID, reqCid)
+                if dataChannel == nil {
+                    log.Printf("Failed to get file.\n")
+                    return -1, internalError
+                }
             }
         }
 
-        protoNode, err := dag.DecodeProtobuf(bytes)
-        if err != nil {
-            log.Printf("Failed to parse bytes from provider. \n")
-            return internalError
-        }
         if isRoot {
+            protoNode, err := dag.DecodeProtobuf(bytes)
+            if err != nil {
+                log.Printf("Failed to parse bytes from provider. \n")
+                return -1, internalError
+            }
             //Get metadata and price
-            rootBlock := &RootBlock{}
             rootBlock.Unmarshal(protoNode.Data())
 
-            log.Printf("%v\n", *rootBlock)
+            log.Printf("Downloading file %v, size: %v bytes, price: %v\n", rootBlock.Name, rootBlock.Size, rootBlock.Price)
 
-            //Do things with data
             isRoot = false
-
             links := protoNode.Links()
             if len(links) == 1 {
                 reqCid = links[0].Cid
             } else {
                 log.Printf("Unexpected links from node. \n")
-                return internalError
+                return -1, internalError
             }
         } else {
-            file.Write(protoNode.Data())
+            deferCleanup = false
+            go func() {
+                bytesWritten := uint64(0)
+                for data := range dataChannel {
+                    file.Write(data)
+                    bytesWritten += uint64(len(data))
+                }
+                file.Close()
+                if bytesWritten != rootBlock.Size {
+                    f.SessionCleanup(session, 1)
+                    log.Printf("Wrong number of bytes received\n")
+                    return
+                }
+                err = os.Rename(outputFile + ".tmp", outputFile)
+                if err != nil {
+                    f.SessionCleanup(session, 1)
+                    log.Printf("Failed to move temporary file to output file. %v\n")
+                    return
+                }
+                f.SessionCleanup(session, 0)
+            }()
             break
         }
     }
-    
-    file.Close()
-    err = os.Rename(outputFile + ".tmp", outputFile)
-    if err != nil {
-        log.Printf("Failed to move temporary file to output file. %v\n")
-        return internalError
-    }
-    return nil
+    return session.sessionID, nil
 }
 
 func (f *FileShareNode) PutFile(ctx context.Context, inputFile string, price float64) (cid.Cid, error) {
@@ -591,7 +850,7 @@ func (f *FileShareNode) PutFile(ctx context.Context, inputFile string, price flo
     file, err := os.OpenFile(inputFile, os.O_RDONLY, 0644)
     if err != nil {
         log.Printf("Error opening file: %v. %v\n", inputFile, err)
-        return cid.Cid{}, internalError
+        return cid.Cid{}, failedToOpenFile
     }
     defer file.Close()
     buffer := []byte{}
@@ -629,6 +888,10 @@ func (f *FileShareNode) PutFile(ctx context.Context, inputFile string, price flo
 
     f.bstore.Put(ctx, node)
     f.bstore.Put(ctx, rootNode.Copy())
+
+    f.fstoreLock.Lock()
+    f.fstore[rootNode.Cid()] = *rootNode
+    f.fstoreLock.Unlock()
 
     err = f.DHT.Provide(ctx, node.Cid(), true)
     if err != nil {

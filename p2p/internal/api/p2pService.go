@@ -64,8 +64,6 @@ func (s *P2PService) FindPeer(peerID string) (PeerStatus, error) {
     return peer, nil
 }
 
-
-
 func (s *P2PService) GetPeers() ([]PeerStatus, error) {
     if s.p2pHost == nil || s.username == nil {
         return nil, notLoggedIn
@@ -282,17 +280,17 @@ func (s *P2PService) PutFile(inputFile string, price float64) (string, error) {
     return cid.String(), nil
 }
 
-func (s *P2PService) GetFile(providerID string, cid string, outputFile string) (string, error) {
+func (s *P2PService) GetFile(providerID string, cid string, outputFile string) (int, error) {
     if s.username == nil || s.exchange == nil {
         log.Printf("Attempted to put file when not logged in\n")
-        return "", notLoggedIn
+        return -1, notLoggedIn
     }
     // err := bitswapGetFile(context.Background(), s.exchange, s.bstore, cid, outputFile)
-    err := s.fsNode.GetFile(context.Background(), providerID, cid, outputFile)
+    sessionID, err := s.fsNode.GetFile(context.Background(), providerID, cid, outputFile)
     if err != nil {
-        return "", err
+        return -1, err
     }
-    return "success", nil
+    return sessionID, nil
 }
 
 func (s *P2PService) FindProviders(cid string) ([]peer.AddrInfo, error) {

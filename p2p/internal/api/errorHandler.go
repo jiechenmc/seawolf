@@ -15,6 +15,11 @@ var keyNotFound = errors.New("Error: Failed to find key")
 var peerNotFound = errors.New("Error: Failed to find peer")
 var timeoutError = errors.New("Error: Timed out")
 
+//Fileshare
+var failedToOpenFile = errors.New("Error: Failed to open file")
+var sessionNotFound = errors.New("Error: Session not found")
+var remoteSessionNotFound = errors.New("Error: Remote session not found")
+
 /* TODO
 func mapError(err error) error {
     switch (err) {
