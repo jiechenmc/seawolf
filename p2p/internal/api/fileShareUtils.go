@@ -45,7 +45,7 @@ type FileShareNode struct {
     Host host.Host
     DHT *dht.IpfsDHT
     bstore blockstore.Blockstore
-    fstore map[cid.Cid]dag.ProtoNode
+    fstore map[cid.Cid]*dag.ProtoNode
     sessionStore map[int]*FileShareSession
     rSessionStore map[peer.ID]map[int]*FileShareRemoteSession
     fstoreLock sync.Mutex
@@ -68,6 +68,7 @@ type FileShareSession struct {
     node *FileShareNode
     streamMap map[peer.ID]*P2PStream
     streamLock sync.Mutex
+    reqLocks map[peer.ID]sync.Mutex
     statsLock sync.Mutex
     pausable *Pausable
     sessionContext context.Context
@@ -90,6 +91,7 @@ type FileShareFileInfo struct {
 type FileShareProvider struct {
     PeerID peer.ID          `json:"peer_id"`
     Price float64           `json:"price"`
+    RootCid string          `json:"root_cid"`
 }
 
 type RootBlock struct {
@@ -188,7 +190,7 @@ func FileShareNodeCreate(node host.Host, kadDHT *dht.IpfsDHT) *FileShareNode {
         Host: node,
         DHT: kadDHT,
         bstore: blkStore,
-        fstore: make(map[cid.Cid]dag.ProtoNode),
+        fstore: make(map[cid.Cid]*dag.ProtoNode),
         sessionStore: make(map[int]*FileShareSession),
         rSessionStore: make(map[peer.ID]map[int]*FileShareRemoteSession),
         fstoreLock: sync.Mutex{},
@@ -323,6 +325,12 @@ func (f *FileShareNode) handleWant(ctx context.Context, stream *P2PStream) error
         if err != nil {
             return err
         }
+    } else {
+        if err != nil {
+            return err
+        } else {
+            goto Failed
+        }
     }
 
     return nil
@@ -394,6 +402,12 @@ func (f *FileShareNode) handleWantData(ctx context.Context, stream *P2PStream) e
             rSession.txBytesLock.Lock()
             rSession.txBytes += uint64(txBytes)
             rSession.txBytesLock.Unlock()
+        }
+    } else {
+        if err != nil {
+            return err
+        } else {
+            goto Failed
         }
     }
 
@@ -515,6 +529,7 @@ func (f *FileShareNode) SessionCreate(ctx context.Context, reqCid cid.Cid) *File
         sessionContext: ctx,
         pausable: NewPausable(),
         statsLock: sync.Mutex{},
+        reqLocks: make(map[peer.ID]sync.Mutex),
         ReqCid: reqCid.String(),
         RxBytes: uint64(0),
         Complete: false,
@@ -626,6 +641,14 @@ func (s *FileShareSession) GetStream(peerID peer.ID) (*P2PStream, error) {
     return stream, nil
 }
 
+func (s *FileShareSession) GetRequestLock(peerID peer.ID) sync.Mutex {
+    _, ok := s.reqLocks[peerID]
+    if !ok {
+        s.reqLocks[peerID] = sync.Mutex{}
+    }
+    return s.reqLocks[peerID]
+}
+
 
 func (s *FileShareSession) DeleteStream(peerID peer.ID) {
     s.streamLock.Lock()
@@ -683,6 +706,9 @@ func (s *FileShareSession) read(peerID peer.ID, n int, timeout time.Duration) ([
 }
 
 func (s *FileShareSession) SendWantHave(peerID peer.ID, cids []cid.Cid) []cid.Cid {
+    reqLock := s.GetRequestLock(peerID)
+    reqLock.Lock()
+    defer reqLock.Unlock()
     if len(cids) == 0 {
         return nil
     }
@@ -734,6 +760,10 @@ func (s *FileShareSession) SendWantHave(peerID peer.ID, cids []cid.Cid) []cid.Ci
 }
 
 func (s *FileShareSession) SendWant(peerID peer.ID, c cid.Cid) []byte {
+    reqLock := s.GetRequestLock(peerID)
+    reqLock.Lock()
+    defer reqLock.Unlock()
+
     //Send WANT request
     err := s.sendString(peerID, fmt.Sprintf("WANT\n%s\n", c.String()))
     if err != nil {
@@ -767,6 +797,9 @@ func (s *FileShareSession) SendWant(peerID peer.ID, c cid.Cid) []byte {
 }
 
 func (s *FileShareSession) SendWantData(peerID peer.ID, c cid.Cid) chan []byte {
+    reqLock := s.GetRequestLock(peerID)
+    reqLock.Lock()
+    defer reqLock.Unlock()
     //Send WANT DATA request
     err := s.sendString(peerID, fmt.Sprintf("WANT DATA\n%d\n%s\n", s.SessionID, c.String()))
     if err != nil {
@@ -854,6 +887,9 @@ func (s *FileShareSession) Resume(ctx context.Context) error {
 }
 
 func (s *FileShareSession) SendDiscover(peerID peer.ID, maxCount int) []cid.Cid {
+    reqLock := s.GetRequestLock(peerID)
+    reqLock.Lock()
+    defer reqLock.Unlock()
     //Create DISCOVER request
     err := s.sendString(peerID, fmt.Sprintf("DISCOVER\n%d\n", maxCount))
     if err != nil {
@@ -969,6 +1005,10 @@ func (f *FileShareNode) GetFile(ctx context.Context, providerIDStr string, rootC
                 log.Printf("Failed to parse bytes from provider.\n")
                 return -1, internalError
             }
+            if protoNode.Cid() != reqCid {
+                log.Printf("Data from provider corrupted.\n")
+                return -1, internalError
+            }
             //Get metadata and price
             err = rootBlock.Unmarshal(protoNode.Data())
             if err != nil {
@@ -989,7 +1029,7 @@ func (f *FileShareNode) GetFile(ctx context.Context, providerIDStr string, rootC
 
             //Add root node to fstore
             f.fstoreLock.Lock()
-            f.fstore[reqCid] = *protoNode
+            f.fstore[reqCid] = protoNode
             f.fstoreLock.Unlock()
         } else {
             deferCleanup = false
@@ -1064,7 +1104,7 @@ func (f *FileShareNode) PutFile(ctx context.Context, inputFile string, price flo
     f.bstore.Put(ctx, rootNode.Copy())
 
     f.fstoreLock.Lock()
-    f.fstore[rootNode.Cid()] = *rootNode
+    f.fstore[rootNode.Cid()] = rootNode
     f.fstoreLock.Unlock()
 
     err = f.DHT.Provide(ctx, node.Cid(), true)
@@ -1092,6 +1132,15 @@ func (f *FileShareNode) Discover(ctx context.Context) []FileShareFileInfo {
     wg := sync.WaitGroup{}
     wg.Add(len(peerIDs))
 
+    //Dump own fstore into set of rootCids
+    cidMapLock.Lock()
+    f.fstoreLock.Lock()
+    for rootCid, _ := range f.fstore {
+        rootCidMap[rootCid] = true
+    }
+    f.fstoreLock.Unlock()
+    cidMapLock.Unlock()
+
     //Iterate through node's known peers and send discover requests
     for _, peerID := range peerIDs {
         go func(peerID peer.ID) {
@@ -1109,7 +1158,6 @@ func (f *FileShareNode) Discover(ctx context.Context) []FileShareFileInfo {
     wg.Wait()
 
     fileCidMap := make(map[string]*FileShareFileInfo)
-
     wg.Add(len(rootCidMap))
     //Iterate through all unique root Cids, get metadata from their providers, and compile a set of unique files(same data cid and file name)
     for rootCid, _ := range rootCidMap {
@@ -1118,14 +1166,32 @@ func (f *FileShareNode) Discover(ctx context.Context) []FileShareFileInfo {
             providerChannel := f.DHT.FindProvidersAsync(ctxTimeout, rootCid, 10)
             defer cancel()
             for provider := range providerChannel {
-                bytes := session.SendWant(provider.ID, rootCid)
-                if bytes == nil {
-                    continue
-                }
-                protoNode, err := dag.DecodeProtobuf(bytes)
-                if err != nil {
-                    //Ignore this provider
-                    continue
+                var protoNode *dag.ProtoNode
+                var err error
+                var ok bool
+                if provider.ID == f.Host.ID() {
+                    f.fstoreLock.Lock()
+                    protoNode, ok = f.fstore[rootCid]
+                    f.fstoreLock.Unlock()
+                    if !ok {
+                        continue
+                    } else {
+                        //Ensure data is in block store if we're a registered provider(in case we've rebooted)
+                        has, err := f.bstore.Has(ctx, protoNode.Links()[0].Cid)
+                        if err != nil || !has {
+                            continue
+                        }
+                    }
+                } else {
+                    bytes := session.SendWant(provider.ID, rootCid)
+                    if bytes == nil {
+                        continue
+                    }
+                    protoNode, err = dag.DecodeProtobuf(bytes)
+                    if err != nil || protoNode.Cid() != rootCid {
+                        //Ignore this provider
+                        continue
+                    }
                 }
                 links := protoNode.Links()
                 //Get metadata and price
@@ -1140,7 +1206,12 @@ func (f *FileShareNode) Discover(ctx context.Context) []FileShareFileInfo {
                 provider := FileShareProvider{
                     PeerID: provider.ID,
                     Price: rootBlock.Price,
+                    RootCid: rootCid.String(),
                 }
+                //Add to fstore
+                f.fstoreLock.Lock()
+                f.fstore[rootCid] = protoNode
+                f.fstoreLock.Unlock()
 
                 //Add unique files into map and accumulate providers for each file
                 cidMapLock.Lock()
