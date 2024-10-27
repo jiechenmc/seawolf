@@ -58,7 +58,7 @@ type FileShareNode struct {
 
 type Pausable struct {
     pauseLock sync.Mutex
-    paused int
+    Paused int              `json:"paused"`
     resumeChannel chan bool
 }
 
@@ -68,13 +68,13 @@ type FileShareSession struct {
     RxBytes uint64                  `json:"rx_bytes"`
     Complete bool                   `json:"is_complete"`
     Result int                      `json:"result"`
+    Pausable
     node *FileShareNode
     streamMap map[peer.ID]*P2PStream
     streamLock sync.Mutex
     reqLocks map[peer.ID]*sync.Mutex
     reqLocksLock sync.Mutex
     statsLock sync.Mutex
-    pausable *Pausable
     sessionContext context.Context
 }
 
@@ -83,7 +83,7 @@ type FileShareRemoteSession struct {
     remotePeerID peer.ID
     txBytesLock sync.Mutex
     txBytes uint64
-    pausable *Pausable
+    Pausable
 }
 
 type FileShareFileDiscoveryInfo struct {
@@ -136,7 +136,7 @@ func (r *FileShareFileMeta) Unmarshal(bytes []byte) error {
     if err != nil {
         return invalidParams
     }
-    if nameByteLen == 0 || len(bytes) < 8 + 8 + 1 + int(nameByteLen) {
+    if nameByteLen == 0 || len(bytes) != 8 + 8 + 1 + int(nameByteLen) {
         return invalidParams
     }
     r.Name = string(bytes[17:17 + nameByteLen])
@@ -146,35 +146,35 @@ func (r *FileShareFileMeta) Unmarshal(bytes []byte) error {
 func NewPausable() *Pausable {
     return &Pausable{
         pauseLock: sync.Mutex{},
-        paused: 0,
+        Paused: 0,
         resumeChannel: make(chan bool, 0),
     }
 }
 
 func (p *Pausable) Pause() {
     p.pauseLock.Lock()
-    if p.paused == 0 {
-        p.paused = 1
+    if p.Paused == 0 {
+        p.Paused = 1
     }
     p.pauseLock.Unlock()
 }
 
 func (p *Pausable) Resume() {
     p.pauseLock.Lock()
-    if p.paused != 0 {
-        for ; p.paused > 1; {
+    if p.Paused != 0 {
+        for ; p.Paused > 1; {
             p.resumeChannel <- true
-            p.paused --
+            p.Paused --
         }
-        p.paused = 0
+        p.Paused = 0
     }
     p.pauseLock.Unlock()
 }
 
 func (p *Pausable) Wait() {
     p.pauseLock.Lock()
-    if p.paused != 0 {
-        p.paused ++
+    if p.Paused != 0 {
+        p.Paused ++
         p.pauseLock.Unlock()
         //Wait for resume
         <- p.resumeChannel
@@ -399,7 +399,7 @@ func (f *FileShareNode) handleWantData(ctx context.Context, stream *P2PStream) e
         //Send the data chunk by chunk
         for byteOffset := 0; byteOffset < len(data); byteOffset += chunkSize {
             //If paused, wait till resumed
-            rSession.pausable.Wait()
+            rSession.Wait()
 
             txBytes := 0
             if (byteOffset + chunkSize) > len(data) {
@@ -454,7 +454,7 @@ func (f *FileShareNode) handleResume(stream *P2PStream) error {
     }
     f.rSessionStoreLock.Unlock()
 
-    rSession.pausable.Resume()
+    rSession.Resume()
     return nil
 }
 
@@ -482,7 +482,7 @@ func (f *FileShareNode) handlePause(stream *P2PStream) error {
     }
     f.rSessionStoreLock.Unlock()
 
-    rSession.pausable.Pause()
+    rSession.Pause()
     return nil
 }
 
@@ -540,7 +540,7 @@ func (f *FileShareNode) SessionCreate(ctx context.Context, reqCidStr string) *Fi
         streamMap: make(map[peer.ID]*P2PStream),
         streamLock: sync.Mutex{},
         sessionContext: ctx,
-        pausable: NewPausable(),
+        Pausable: *NewPausable(),
         statsLock: sync.Mutex{},
         reqLocks: make(map[peer.ID]*sync.Mutex),
         reqLocksLock: sync.Mutex{},
@@ -576,7 +576,7 @@ func (f *FileShareNode) RemoteSessionCreate(remotePeerID peer.ID, remoteSessionI
         rSession = &FileShareRemoteSession{
             remoteSessionID: remoteSessionID,
             remotePeerID: remotePeerID,
-            pausable: NewPausable(),
+            Pausable: *NewPausable(),
             txBytesLock: sync.Mutex{},
             txBytes: uint64(0),
         }
@@ -615,7 +615,7 @@ func (f *FileShareNode) PauseSession(sessionID int) error {
         return sessionNotFound
     }
 
-    session.Pause()
+    session.PauseSession()
     return nil
 }
 
@@ -627,7 +627,7 @@ func (f *FileShareNode) ResumeSession(sessionID int) error {
         return sessionNotFound
     }
 
-    session.Resume()
+    session.ResumeSession()
     return nil
 }
 
@@ -664,7 +664,8 @@ func (s *FileShareSession) GetRequestLock(peerID peer.ID) *sync.Mutex {
     if !ok {
         s.reqLocks[peerID] = &sync.Mutex{}
     }
-    return s.reqLocks[peerID]
+    lock := s.reqLocks[peerID]
+    return lock
 }
 
 
@@ -845,7 +846,7 @@ func (s *FileShareSession) SendWantData(peerID peer.ID, c cid.Cid) chan []byte {
         go func() {
             for byteOffset := 0; byteOffset < size; byteOffset += chunkSize {
                 //If paused wait till resumed
-                s.pausable.Wait()
+                s.Wait()
 
                 if (size - byteOffset) < chunkSize {
                     chunkData, err = s.read(peerID, size - byteOffset, fileShareWantHaveTimeout)
@@ -868,8 +869,8 @@ func (s *FileShareSession) SendWantData(peerID peer.ID, c cid.Cid) chan []byte {
     return nil
 }
 
-func (s *FileShareSession) Pause() error {
-    s.pausable.Pause()
+func (s *FileShareSession) PauseSession() error {
+    s.Pause()
     for peerID, _ := range s.streamMap {
         timeoutCtx, cancel := context.WithTimeout(s.sessionContext, fileShareOpenStreamTimeout)
         stream, err := p2pOpenStream(timeoutCtx, fileShareProtocol, s.node.host, s.node.kadDHT, peerID.String())
@@ -885,8 +886,8 @@ func (s *FileShareSession) Pause() error {
 }
 
 
-func (s *FileShareSession) Resume() error {
-    s.pausable.Resume()
+func (s *FileShareSession) ResumeSession() error {
+    s.Resume()
     for peerID, _ := range s.streamMap {
         timeoutCtx, cancel := context.WithTimeout(s.sessionContext, fileShareOpenStreamTimeout)
         stream, err := p2pOpenStream(timeoutCtx, fileShareProtocol, s.node.host, s.node.kadDHT, peerID.String())
@@ -1157,6 +1158,7 @@ func (f *FileShareNode) PutFile(ctx context.Context, inputFile string, price flo
 
 func (f *FileShareNode) Discover(ctx context.Context) []FileShareFileDiscoveryInfo {
     session := f.SessionCreate(ctx, "")
+    defer f.SessionCleanup(session, 0)
 
     mapLock := sync.Mutex{}
     fileDiscoveryMap := make(map[cid.Cid]*FileShareFileDiscoveryInfo)
