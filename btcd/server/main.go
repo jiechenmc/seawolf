@@ -5,7 +5,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -26,50 +25,6 @@ import (
 // Si9teS1ayrGzhynLCYGaRA73wnuGgGbBq7
 // seed:
 // 6779ea5e457d009b17b842510c755d89d781cb56507d05ae3c9efec062567b26
-
-type App struct {
-	rpcClient *rpcclient.Client
-}
-
-func (app *App) balanceHandler(w http.ResponseWriter, r *http.Request) {
-	balance, err := api.GetBalance(app.rpcClient)
-	if err != nil {
-		log.Fatalf(err.Error())
-	}
-	fmt.Fprintf(w, "%v", balance)
-}
-
-type RequestData struct {
-	Address    string `json:"address"`
-	Amount     int    `json:"amount"`
-	Passphrase string `json:"passphrase"`
-}
-
-func (app *App) transferHandler(w http.ResponseWriter, r *http.Request) {
-
-	// Decode the JSON body into the struct
-	var data RequestData
-	err := json.NewDecoder(r.Body).Decode(&data)
-	if err != nil {
-		http.Error(w, "Bad request: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-	// Process the data (here, we simply print it)
-	fmt.Printf("Received data: %+v\n", data)
-
-	txid, err := api.SendToAddress(app.rpcClient, data.Address, float64(data.Amount), data.Passphrase)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Header().Set("Content-Type", "application/json")
-		response := map[string]any{"status": "error", "message": err.Error(), "txid": txid}
-		json.NewEncoder(w).Encode(response)
-	} else {
-		w.WriteHeader(http.StatusOK)
-		w.Header().Set("Content-Type", "application/json")
-		response := map[string]any{"status": "success", "message": "Transaction Received", "txid": txid}
-		json.NewEncoder(w).Encode(response)
-	}
-}
 
 func main() {
 	// Only override the handlers for notifications you care about.
@@ -105,12 +60,14 @@ func main() {
 		log.Fatal(err)
 	}
 
-	app := &App{
-		rpcClient: client,
+	app := &api.App{
+		RpcClient:  client,
+		Passphrase: "2578547813",
 	}
 
-	http.HandleFunc("/balance", app.balanceHandler)
-	http.HandleFunc("/transfer", app.transferHandler)
+	http.HandleFunc("/balance", app.BalanceHandler)
+	http.HandleFunc("/transfer", app.TransferHandler)
+	http.HandleFunc("/account", app.AccountHandler)
 
 	fmt.Println("Server is listening on port 8080...")
 	err = http.ListenAndServe(":8080", nil) // Start the HTTP server on port 8080
