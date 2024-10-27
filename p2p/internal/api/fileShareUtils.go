@@ -68,7 +68,7 @@ type FileShareSession struct {
     node *FileShareNode
     streamMap map[peer.ID]*P2PStream
     streamLock sync.Mutex
-    reqLocks map[peer.ID]sync.Mutex
+    reqLocks map[peer.ID]*sync.Mutex
     statsLock sync.Mutex
     pausable *Pausable
     sessionContext context.Context
@@ -529,7 +529,7 @@ func (f *FileShareNode) SessionCreate(ctx context.Context, reqCid cid.Cid) *File
         sessionContext: ctx,
         pausable: NewPausable(),
         statsLock: sync.Mutex{},
-        reqLocks: make(map[peer.ID]sync.Mutex),
+        reqLocks: make(map[peer.ID]*sync.Mutex),
         ReqCid: reqCid.String(),
         RxBytes: uint64(0),
         Complete: false,
@@ -641,10 +641,10 @@ func (s *FileShareSession) GetStream(peerID peer.ID) (*P2PStream, error) {
     return stream, nil
 }
 
-func (s *FileShareSession) GetRequestLock(peerID peer.ID) sync.Mutex {
+func (s *FileShareSession) GetRequestLock(peerID peer.ID) *sync.Mutex {
     _, ok := s.reqLocks[peerID]
     if !ok {
-        s.reqLocks[peerID] = sync.Mutex{}
+        s.reqLocks[peerID] = &sync.Mutex{}
     }
     return s.reqLocks[peerID]
 }
