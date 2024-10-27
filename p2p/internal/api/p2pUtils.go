@@ -386,34 +386,34 @@ type P2PStream struct {
     ReadWriter *bufio.ReadWriter
 }
 
-func p2pOpenStream(ctx context.Context, protocolStr string, node host.Host, peerIDStr string) (P2PStream, error) {
+func p2pOpenStream(ctx context.Context, protocolStr string, node host.Host, peerIDStr string) (*P2PStream, error) {
     peerID, err := peer.Decode(peerIDStr)
     if err != nil {
         log.Printf("Failed to decode peer ID string '%v'. %v\n", peerIDStr, err)
-        return P2PStream{}, invalidParams
+        return nil, invalidParams
     }
 
     stream, err := node.NewStream(network.WithAllowLimitedConn(ctx, protocolStr), peerID, protocol.ID(protocolStr))
     if err != nil {
         log.Printf("Failed to open stream after multiple attempts. %v", err)
-        return P2PStream{}, internalError
+        return nil, internalError
     }
 
     reader := bufio.NewReader(stream)
     writer := bufio.NewWriter(stream)
     rw := bufio.NewReadWriter(reader, writer)
 
-    return P2PStream{ peerID, &stream, rw }, err
+    return &P2PStream{ peerID, &stream, rw }, err
 }
 
-func p2pWrapStream(stream *network.Stream) P2PStream {
+func p2pWrapStream(stream *network.Stream) *P2PStream {
     reader := bufio.NewReader(*stream)
     writer := bufio.NewWriter(*stream)
     rw := bufio.NewReadWriter(reader, writer)
-    return P2PStream{ (*stream).Conn().RemotePeer(), stream, rw }
+    return &P2PStream{ (*stream).Conn().RemotePeer(), stream, rw }
 }
 
-func (s P2PStream) Send(bytes []byte) error {
+func (s *P2PStream) Send(bytes []byte) error {
     _, err := s.ReadWriter.Write(bytes)
     if err != nil {
         goto failed
@@ -427,7 +427,7 @@ failed:
     return nil
 }
 
-func (s P2PStream) SendString(str string) error {
+func (s *P2PStream) SendString(str string) error {
     _, err := fmt.Fprint(s.ReadWriter, str)
     if err != nil {
         goto failed
@@ -441,7 +441,7 @@ failed:
     return nil
 }
 
-func (s P2PStream) Read(n int, timeout time.Duration) ([]byte, error) {
+func (s *P2PStream) Read(n int, timeout time.Duration) ([]byte, error) {
     var err error
     bytes := make([]byte, n)
     //Read n bytes
@@ -458,7 +458,7 @@ func (s P2PStream) Read(n int, timeout time.Duration) ([]byte, error) {
     return bytes, nil
 }
 
-func (s P2PStream) ReadString(delim byte, timeout time.Duration) (string, error) {
+func (s *P2PStream) ReadString(delim byte, timeout time.Duration) (string, error) {
     if timeout != 0 {
         (*s.NetworkStream).SetReadDeadline(time.Now().Add(timeout))
     }
@@ -471,6 +471,6 @@ func (s P2PStream) ReadString(delim byte, timeout time.Duration) (string, error)
     return str, nil
 }
 
-func (s P2PStream) Close() {
+func (s *P2PStream) Close() {
     (*s.NetworkStream).Close()
 }

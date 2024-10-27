@@ -375,3 +375,11 @@ func (s *P2PService) SendMessage(peerID string, message string) (string, error) 
 
     return "success", nil
 }
+
+func (s *P2PService) DiscoverFiles() ([]FileShareFileInfo, error) {
+    if s.username == nil || s.fsNode == nil {
+        log.Printf("Attempted to put file when not logged in\n")
+        return nil, notLoggedIn
+    }
+    return s.fsNode.Discover(context.Background()), nil
+}
