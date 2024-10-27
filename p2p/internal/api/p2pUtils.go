@@ -41,6 +41,7 @@ func (v *CustomValidator) Select(key string, values [][]byte) (int, error) {
     return 0, nil
 }
 
+const p2pConnectionTimeout = time.Second * 3
 const relayNodeAddr = "/ip4/130.245.173.221/tcp/4001/p2p/12D3KooWDpJ7As7BWAwRMfu1VU2WCqNjvq387JEYKDBj4kx6nXTN"
 // const bootstrapNodeAddr = "/ip4/130.245.173.221/tcp/4001/p2p/12D3KooWDpJ7As7BWAwRMfu1VU2WCqNjvq387JEYKDBj4kx6nXTN"
 // const bootstrapNodeAddr = "/ip4/130.245.173.222/tcp/61000/p2p/12D3KooWQd1K1k8XA9xVEzSAu7HUCodC7LJB6uW5Kw4VwkRdstPE"
@@ -134,7 +135,7 @@ func p2pConnectToPeerID(ctx context.Context, node host.Host, kadDHT *dht.IpfsDHT
         return invalidParams
     }
 
-    timeoutCtx, cancel := context.WithTimeout(ctx, time.Second * 10)
+    timeoutCtx, cancel := context.WithTimeout(ctx, p2pConnectionTimeout)
     //Attempt to find peer in own peerstore or via DHT
     peerStatus, err := p2pFindPeer(timeoutCtx, node, kadDHT, peerIDStr)
     cancel()
@@ -144,7 +145,7 @@ func p2pConnectToPeerID(ctx context.Context, node host.Host, kadDHT *dht.IpfsDHT
             log.Printf("Already connected to peer: %v\n", peerIDStr)
             return nil
         }
-        timeoutCtx, cancel = context.WithTimeout(ctx, time.Second * 10)
+        timeoutCtx, cancel = context.WithTimeout(ctx, p2pConnectionTimeout)
 		err = node.Connect(timeoutCtx, peer.AddrInfo{ ID: peerID })
         cancel()
         //Return if we've successfully connected
@@ -153,8 +154,6 @@ func p2pConnectToPeerID(ctx context.Context, node host.Host, kadDHT *dht.IpfsDHT
             return nil
         }
     }
-    //Fallback by trying to connect via relay
-    err = p2pConnectToPeerUsingRelay(ctx, node, peerIDStr)
     return err
 }
 
@@ -386,11 +385,16 @@ type P2PStream struct {
     ReadWriter *bufio.ReadWriter
 }
 
-func p2pOpenStream(ctx context.Context, protocolStr string, node host.Host, peerIDStr string) (*P2PStream, error) {
+func p2pOpenStream(ctx context.Context, protocolStr string, node host.Host, kadDHT *dht.IpfsDHT, peerIDStr string) (*P2PStream, error) {
     peerID, err := peer.Decode(peerIDStr)
     if err != nil {
         log.Printf("Failed to decode peer ID string '%v'. %v\n", peerIDStr, err)
         return nil, invalidParams
+    }
+
+    err = p2pConnectToPeerID(ctx, node, kadDHT, peerIDStr)
+    if err != nil {
+        return nil, err
     }
 
     stream, err := node.NewStream(network.WithAllowLimitedConn(ctx, protocolStr), peerID, protocol.ID(protocolStr))

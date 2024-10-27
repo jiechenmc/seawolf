@@ -298,7 +298,7 @@ func (s *P2PService) Pause(sessionID int) error {
         log.Printf("Attempted to put file when not logged in\n")
         return notLoggedIn
     }
-    err := s.fsNode.PauseSession(context.Background(), sessionID)
+    err := s.fsNode.PauseSession(sessionID)
     if err != nil {
         return err
     }
@@ -310,7 +310,7 @@ func (s *P2PService) Resume(sessionID int) error {
         log.Printf("Attempted to put file when not logged in\n")
         return notLoggedIn
     }
-    err := s.fsNode.ResumeSession(context.Background(), sessionID)
+    err := s.fsNode.ResumeSession(sessionID)
     if err != nil {
         return err
     }
@@ -376,10 +376,18 @@ func (s *P2PService) SendMessage(peerID string, message string) (string, error) 
     return "success", nil
 }
 
-func (s *P2PService) DiscoverFiles() ([]FileShareFileInfo, error) {
+func (s *P2PService) DiscoverFiles() ([]FileShareFileDiscoveryInfo, error) {
     if s.username == nil || s.fsNode == nil {
         log.Printf("Attempted to put file when not logged in\n")
         return nil, notLoggedIn
     }
     return s.fsNode.Discover(context.Background()), nil
+}
+
+func (s *P2PService) DiscoverFile(reqCid string) (*FileShareFileDiscoveryInfo, error) {
+    if s.username == nil || s.fsNode == nil {
+        log.Printf("Attempted to put file when not logged in\n")
+        return nil, notLoggedIn
+    }
+    return s.fsNode.GetFileDiscoveryInfo(context.Background(), reqCid)
 }

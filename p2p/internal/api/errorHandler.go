@@ -19,6 +19,7 @@ var timeoutError = errors.New("Error: Timed out")
 var failedToOpenFile = errors.New("Error: Failed to open file")
 var sessionNotFound = errors.New("Error: Session not found")
 var remoteSessionNotFound = errors.New("Error: Remote session not found")
+var contentNotFound = errors.New("Error: Content not found")
 
 /* TODO
 func mapError(err error) error {
