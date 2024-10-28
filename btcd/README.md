@@ -12,9 +12,7 @@ Filesharing with rewards 💰💰💰
 
 ```bash
 - docker exec -it seawolf-btcd-1 bash
-- bctl --wallet getnewaddress # SKIP IF ALREADY EXISTS
-- bctl --wallet listreceivedbyaddress # SKIP IF ALREADY KNOW ADDRESS
-- btcd --miningaddr SUXxmVw5JWqSYC5syeCHBz15pEG2sFfxsk # Start btcd with a mining address
+- btcd # Start btcd with a mining address
 - cp /root/.btcd/rpc.cert /root/.btcwallet/btcd.cert # IMPORTANT; NEED TO BE DONE BEFORE FIRST STEP IF NOT FIRST TIME
 ```
 
@@ -22,6 +20,8 @@ Filesharing with rewards 💰💰💰
 
 ```bash
 - docker exec -it seawolf-btcd-1 bash
+- bctl --wallet getnewaddress # SKIP IF ALREADY EXISTS
+- bctl --wallet listreceivedbyaddress # SKIP IF ALREADY KNOW ADDRESS
 - btcwallet -u $btcdusername -P $btcdpassword --create  # Run this once to create a wallet; use the seed in discord
 - btcwallet -u $btcdusername -P $btcdpassword # Run this anytime u want to start the wallet
 ```
