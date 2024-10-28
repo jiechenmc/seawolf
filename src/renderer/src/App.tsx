@@ -6,6 +6,7 @@ import Mining from './components/Mining'
 import Proxy from './components/Proxy'
 import Wallet from './components/Wallet'
 import Account from './components/Account'
+import Market from './components/Market'
 import { AppProvider } from './AppContext'
 
 function App(): JSX.Element {
@@ -20,6 +21,7 @@ function App(): JSX.Element {
           <Route path="/proxy" element={<Proxy />} />
           <Route path="/wallet" element={<Wallet />} />
           <Route path="/account" element={<Account />} />
+          <Route path="/market" element={<Market />} />
         </Routes>
       </Router>
     </AppProvider>

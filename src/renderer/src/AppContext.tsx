@@ -6,6 +6,15 @@ type fileType = {
   size: number
   cost: number
 }
+type ListingType = {
+  cid: number
+  name: string
+  size: number
+  cost: number
+  endDate: string
+  type: 'sale' | 'auction'
+  status: 'active' | 'ended'
+}
 
 type proxyType = {
   ip: string
@@ -67,6 +76,9 @@ const AppProvider = ({ children }) => {
 
   const [historyView, setHistoryView] = useState<historyType[]>(testList3)
 
+  const [marketListings, setMarketListings] = useState<ListingType[]>([])
+  const [userMarketListings, setUserMarketListings] = useState<ListingType[]>([])
+
   return (
     <AppContext.Provider
       value={{
@@ -80,7 +92,9 @@ const AppProvider = ({ children }) => {
         proxies: [listOfProxies, setListOfProxies],
         balance: [walletBalance, setWalletBalance],
         downloadFiles: [downloadedFiles, setDownloadedFiles],
-        history: [historyView, setHistoryView]
+        history: [historyView, setHistoryView],
+        marketListing: [marketListings, setMarketListings],
+        userListing: [userMarketListings, setUserMarketListings],
       }}
     >
       {children}
