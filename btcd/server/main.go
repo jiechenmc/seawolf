@@ -62,7 +62,7 @@ func main() {
 
 	app := &api.App{
 		RpcClient:  client,
-		Passphrase: "2578547813",
+		Passphrase: "cse416",
 	}
 
 	http.HandleFunc("/balance", app.BalanceHandler)
