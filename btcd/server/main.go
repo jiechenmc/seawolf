@@ -78,6 +78,7 @@ func main() {
 	spawnBtcd(ctx)
 	spawnWallet(ctx)
 
+	fmt.Println("Please wait 10 seconds for BTCD to start..., then will the http server be available.")
 	time.Sleep(10 * time.Second)
 
 	ntfnHandlers := rpcclient.NotificationHandlers{}
@@ -118,6 +119,6 @@ func main() {
 	if err != nil {
 		fmt.Println("Error starting server:", err)
 	}
-
+	<-ctx.Done()
 	defer client.Shutdown()
 }
