@@ -5,12 +5,17 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"seawolf/coin/api"
+	"syscall"
+	"time"
 
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/rpcclient"
@@ -18,28 +23,64 @@ import (
 
 // -> Admin
 // createwallet <name> <passphrase>
+func spawnBtcd(ctx context.Context) *exec.Cmd {
+	cmd := exec.Command("btcd", "-a", "130.245.173.221:8333", "--miningaddr", "1AMMu8eiCkyNA6z7e4w12udCN95eBTaBq1")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 
-// current addresses for testing:
-// SQvC2vyTrCtZnEoqhRMJozK3k2ovauhCEt
-// SV3AKDppayuuBVADVSbiAs6Nxgr7HMmfw6
-// Si9teS1ayrGzhynLCYGaRA73wnuGgGbBq7
-// seed:
-// 6779ea5e457d009b17b842510c755d89d781cb56507d05ae3c9efec062567b26
+	// Start the process in the background
+	err := cmd.Start()
+	if err != nil {
+		log.Fatalf("Failed to start btcd: %v", err)
+	}
+
+	log.Printf("btcd is running with PID %d", cmd.Process.Pid)
+
+	go func() {
+		<-ctx.Done()
+		log.Println("Shutting down btcd...")
+		cmd.Process.Signal(syscall.SIGKILL)
+	}()
+	return cmd
+}
+
+func spawnWallet(ctx context.Context) *exec.Cmd {
+
+	cmd := exec.Command("btcwallet", "-u", os.Getenv("btcdusername"), "-P", os.Getenv("btcdpassword"))
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	// Start the process in the background
+	err := cmd.Start()
+	if err != nil {
+		log.Fatalf("Failed to start btcwallet: %v", err)
+	}
+
+	log.Printf("btcwallet is running with PID %d", cmd.Process.Pid)
+
+	go func() {
+		<-ctx.Done()
+		log.Println("Shutting down btcwallet...")
+		cmd.Process.Signal(syscall.SIGKILL)
+	}()
+	return cmd
+}
 
 func main() {
 	// Only override the handlers for notifications you care about.
 	// Also note most of the handlers will only be called if you register
 	// for notifications.  See the documentation of the rpcclient
 	// NotificationHandlers type for more details about each handler.
-	ntfnHandlers := rpcclient.NotificationHandlers{
-		OnAccountBalance: func(account string, balance btcutil.Amount, confirmed bool) {
-			log.Printf("New balance for account %s: %v", account,
-				balance)
-		},
-		OnWalletLockState: func(locked bool) {
-			log.Printf("%v", locked)
-		},
-	}
+
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	spawnBtcd(ctx)
+	spawnWallet(ctx)
+
+	time.Sleep(10 * time.Second)
+
+	ntfnHandlers := rpcclient.NotificationHandlers{}
 
 	// Connect to local btcwallet RPC server using websockets.
 	certHomeDir := btcutil.AppDataDir("btcwallet", false)
@@ -57,6 +98,7 @@ func main() {
 	}
 
 	client, err := rpcclient.New(connCfg, &ntfnHandlers)
+
 	if err != nil {
 		log.Fatal(err)
 	}

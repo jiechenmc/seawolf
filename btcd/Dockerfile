@@ -20,6 +20,10 @@ ENV btcdusername="rpcuser"
 ENV btcdpassword="rpcpass"
 # ENV btcdnetwork="mainnet"
 
-RUN echo "alias bctl='btcctl --rpcuser=$btcdusername --rpcpass=$btcdpassword'" >> /root/.bashrc
+RUN echo "alias bctl='btcctl --notls --rpcuser=$btcdusername --rpcpass=$btcdpassword'" >> /root/.bashrc
 
-# CMD [ "btcd", "-u", "rpcuser", "-P", "rpcpass", "--simnet", "--miningaddr", "SZoGnna9NsjkZWusgFJ3DGirJpq22GqmES" ]
+WORKDIR /app/server
+
+EXPOSE 8080
+
+CMD [ "go", "run", "main.go" ]
