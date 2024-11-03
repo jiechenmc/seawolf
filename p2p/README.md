@@ -21,11 +21,14 @@ Run Program:
 ./seawolf_p2p
 ```
 
-Running the program will create a sqlite database file `seawolf_p2p.db` and Unix socket `seawolf_p2p.sock`. 
+Running the program will create a sqlite database file `seawolf_p2p.db`.
 
 To forge Json-RPC requests from the command line:
 ```
-{"jsonrpc": "2.0", "id": "1", "method": "p2p_<funcName(camelCase)>", "params": [...]} | nc -U seawolf_p2p.sock | jq .
+curl -X POST \
+     -H 'Content-Type: application/json' \
+     -d '{ "jsonrpc":"2.0", "id":"<id>", "method":"p2p_<funcName(camelCase)", "params":[...]}' \
+     http://localhost:8081
 ```
 
 
