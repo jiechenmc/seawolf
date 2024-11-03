@@ -28,7 +28,7 @@ To forge Json-RPC requests from the command line:
 curl -X POST \
      -H 'Content-Type: application/json' \
      -d '{ "jsonrpc":"2.0", "id":"<id>", "method":"p2p_<funcName(camelCase)", "params":[...]}' \
-     http://localhost:8081
+     http://localhost:8081/rpc
 ```
 
 
@@ -62,6 +62,20 @@ Password: string - login password
 ```
 string - peerID of the logged in user
 ```
+
+## p2p_logout
+Logs out
+
+#### Parameters
+```
+None
+```
+
+#### Returns
+```
+string - "success"
+```
+
 
 ### p2p_getPeers
 Returns all known peers and their status

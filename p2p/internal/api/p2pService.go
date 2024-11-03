@@ -190,6 +190,16 @@ func (s *P2PService) Login( username string, password string) (string, error) {
     return (*s.p2pHost).ID().String(), nil
 }
 
+func (s *P2PService) Logout() (string, error) {
+    if s.username == nil {
+        return "", notLoggedIn
+    }
+    s.username = nil;
+    s.fsNode = nil;
+    s.p2pHost = nil;
+    return "success", nil
+}
+
 func (s *P2PService) Register(username string, password string, seed string) (string, error) {
     //Optional seed parameter for private key generation
     var seedBytes []byte = nil
