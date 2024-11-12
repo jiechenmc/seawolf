@@ -19,12 +19,17 @@ type ListingType = {
 }
 
 const CreateListingContent = () => {
-  const { allFiles} = React.useContext(AppContext)
-  const { 
+  const { allFiles, downloadFiles } = React.useContext(AppContext)
+  const {
     marketListing: [marketListings, setMarketListings],
     userListing: [userListings, setUserListings]
-   } = React.useContext(AppContext)
+  } = React.useContext(AppContext)
   const [listOfFiles] = allFiles
+  const [downloadedFiles] = downloadFiles
+
+  const filesForMarket = listOfFiles.concat(
+    downloadedFiles.filter((file) => file.status === 'Done').map((file) => file.file)
+  )
 
   const [selectedFile, setSelectedFile] = useState<FileType | null>(null)
   const [cost, setCost] = useState<number>(0)
@@ -59,13 +64,13 @@ const CreateListingContent = () => {
     }
 
     const isAlreadyListed = marketListings.some(
-        listing => listing.cid === selectedFile.cid && listing.status === 'active'
-      )
-  
-      if (isAlreadyListed) {
-        setFormError('This file is already listed in the market')
-        return
-      }
+      (listing) => listing.cid === selectedFile.cid && listing.status === 'active'
+    )
+
+    if (isAlreadyListed) {
+      setFormError('This file is already listed in the market')
+      return
+    }
 
     const newListing: ListingType = {
       cid: selectedFile.cid,
@@ -77,8 +82,8 @@ const CreateListingContent = () => {
       status: 'active'
     }
 
-    setMarketListings(prevListings => [...prevListings, newListing])
-    setUserListings(prevListings => [...prevListings, newListing])
+    setMarketListings((prevListings) => [...prevListings, newListing])
+    setUserListings((prevListings) => [...prevListings, newListing])
     // Reset form
     setSelectedFile(null)
     setCost(0)
@@ -93,19 +98,17 @@ const CreateListingContent = () => {
         <form onSubmit={handleSubmit}>
           {/* File Selection */}
           <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Select File
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Select File</label>
             <select
               className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               value={selectedFile?.cid || ''}
               onChange={(e) => {
-                const file = listOfFiles.find(f => f.cid.toString() === e.target.value)
+                const file = filesForMarket.find((f) => f.cid.toString() === e.target.value)
                 setSelectedFile(file || null)
               }}
             >
               <option value="">Select a file</option>
-              {listOfFiles.map((file: FileType) => (
+              {filesForMarket.map((file: FileType) => (
                 <option key={file.cid} value={file.cid}>
                   {file.name} ({file.size} MB)
                 </option>
@@ -114,10 +117,8 @@ const CreateListingContent = () => {
           </div>
 
           {/* Auction or Sale */}
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Listing Type
-            </label>
+          {/* <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Listing Type</label>
             <div className="flex gap-4">
               <label className="flex items-center">
                 <input
@@ -140,7 +141,7 @@ const CreateListingContent = () => {
                 Auction
               </label>
             </div>
-          </div>
+          </div> */}
 
           {/* Cost/Starting Bid */}
           <div className="mb-6">
@@ -166,9 +167,7 @@ const CreateListingContent = () => {
 
           {/* End Date */}
           <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              End Date
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
             <input
               type="date"
               value={endDate}
@@ -179,11 +178,7 @@ const CreateListingContent = () => {
           </div>
 
           {/* Error */}
-          {formError && (
-            <div className="mb-4 text-red-500 text-sm">
-              {formError}
-            </div>
-          )}
+          {formError && <div className="mb-4 text-red-500 text-sm">{formError}</div>}
 
           {/* Submit Button */}
           <button

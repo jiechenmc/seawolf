@@ -99,6 +99,7 @@ function Upload(): JSX.Element {
         countByte += file.size / 1e6
         countFile++
         let newFile: fileType = {
+          // cid: generateRandom10DigitNumber(),
           cid: generateRandom10DigitNumber(),
           name: file.name,
           size: file.size / 1e6,

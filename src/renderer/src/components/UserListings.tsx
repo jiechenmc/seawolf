@@ -4,6 +4,7 @@ import { LuFileText } from 'react-icons/lu'
 import { BsFiletypeMp4, BsFiletypeMp3, BsFiletypePng, BsFiletypeJpg } from 'react-icons/bs'
 import { ChevronDown } from 'lucide-react'
 import { AppContext } from '../AppContext'
+import ChatMenu from './ChatMenu'
 
 type ListingType = {
   cid: number
@@ -25,6 +26,16 @@ const UserListings = () => {
   const [displayedListings, setDisplayedListings] = useState<ListingType[]>([]) 
   const [sortBy, setSortBy] = useState('lowest_price')
   const [showSortOptions, setShowSortOptions] = useState(false)
+
+  const [isChatOpen, setIsChatOpen] = useState(false)
+
+  const handleChatOpen = () => {
+    setIsChatOpen(true)
+  }
+
+  const handleChatClose = () => {
+    setIsChatOpen(false)
+  }
 
   useEffect(() => {
     setDisplayedListings(userListings)
@@ -197,6 +208,9 @@ const UserListings = () => {
             }`}>
               {listing.status}
             </span>
+            <button onClick={handleChatOpen} className="bg-[#737fa3] text-white px-3 py-1 rounded">
+              Chat
+            </button>
             <button
               onClick={() => handleRemoveListing(listing)}
               className="text-red-500 hover:text-red-700 ml-2"
@@ -206,6 +220,8 @@ const UserListings = () => {
           </span>
         </div>
       ))}
+
+      {isChatOpen && <ChatMenu onClose={handleChatClose} otherUserName="Test"/>}
 
       {/* Pagination */}
       <div className="mt-4 flex justify-center gap-2">

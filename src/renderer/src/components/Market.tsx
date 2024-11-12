@@ -3,11 +3,12 @@ import SideNav from './SideNav'
 import ListingsContent from './ListingsContext'
 import CreateListingContent from './CreateListingContent'
 import UserListings from './UserListings'
-
+import { AppContext } from '../AppContext'
 
 function Market(): JSX.Element {
-  
-  const [activeTab, setActiveTab] = useState<'Listings' | 'YourListings' | 'CreateListing'>('Listings')    
+  const [activeTab, setActiveTab] = useState<'Listings' | 'YourListings' | 'CreateListing'>(
+    'Listings'
+  )
   return (
     <div className="flex ml-52">
       <SideNav />

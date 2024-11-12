@@ -4,6 +4,7 @@ import { LuFileText } from 'react-icons/lu'
 import { BsFiletypeMp4, BsFiletypeMp3, BsFiletypePng, BsFiletypeJpg } from 'react-icons/bs'
 import { ChevronDown } from 'lucide-react'
 import { AppContext } from '../AppContext'
+import ChatMenu from './ChatMenu'
 
 type ListingType = {
   cid: number
@@ -20,6 +21,16 @@ const ListingsContent = () => {
   const [displayedListings, setDisplayedListings] = useState<ListingType[]>([]) 
   const [sortBy, setSortBy] = useState('lowest_price')
   const [showSortOptions, setShowSortOptions] = useState(false)
+
+  const [isChatOpen, setIsChatOpen] = useState(false)
+
+  const handleChatOpen = () => {
+    setIsChatOpen(true)
+  }
+
+  const handleChatClose = () => {
+    setIsChatOpen(false)
+  }
 
   useEffect(() => {
     setDisplayedListings(marketListings)
@@ -147,7 +158,9 @@ const ListingsContent = () => {
           <span className="flex-1 font-semibold text-left">Action</span>
         </div>
       </div>
-      
+        
+      {isChatOpen && <ChatMenu onClose={handleChatClose} otherUserName="Test"/>}
+
       {displayedListings.map((listing, index) => (
         <div
           key={index}
@@ -171,11 +184,14 @@ const ListingsContent = () => {
             })}{' '}
             MB
           </span>
-          <span className="flex-1 text-left">
+          <span className="flex-1">
             <button
-              className="bg-[#737fa3] hover:bg-[#7c85a3] text-white px-3 py-1 rounded"
+              className="bg-[#737fa3] hover:bg-[#7c85a3] text-white px-3 py-1 mr-5 rounded"
             >
               {listing.type === 'auction' ? 'Bid' : 'Buy'}
+            </button>
+            <button onClick={handleChatOpen} className="bg-[#737fa3] text-white px-3 py-1 rounded">
+              Chat
             </button>
           </span>
         </div>

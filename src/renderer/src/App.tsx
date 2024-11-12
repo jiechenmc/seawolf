@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom'
 import Login from './components/Login'
+import Register from './components/Register'
 import Upload from './components/Upload'
 import Download from './components/Download'
 import Mining from './components/Mining'
@@ -15,6 +16,7 @@ function App(): JSX.Element {
       <Router>
         <Routes>
           <Route path="/" element={<Login />} />
+          <Route path="/register" element={<Register />} />
           <Route path="/upload" element={<Upload />} />
           <Route path="/download" element={<Download />} />
           <Route path="/mining" element={<Mining />} />

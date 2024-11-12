@@ -39,13 +39,13 @@ function SideNav(): JSX.Element {
           <span>Download</span>
         </button>
 
-        <button
+        {/* <button
           className="flex items-center px-6 py-2 w-11/12 hover:bg-[#9db6b6] ml-1 rounded-lg font-semibold"
           onClick={(event) => handleClickTab(event, '/mining')}
         >
           <GiTwoCoins className="mr-5 text-3xl" />
           <span>Mining</span>
-        </button>
+        </button> */}
 
         <button
           className="flex items-center px-6 py-2 w-11/12 hover:bg-[#9db6b6] ml-1 rounded-lg font-semibold"
@@ -65,18 +65,18 @@ function SideNav(): JSX.Element {
 
         <button
           className="flex items-center px-6 py-2 w-11/12 hover:bg-[#9db6b6] ml-1 rounded-lg font-semibold"
-          onClick={(event) => handleClickTab(event, '/account')}
-        >
-          <FaMale className="mr-5 text-3xl" />
-          <span>Account</span>
-        </button>
-
-        <button
-          className="flex items-center px-6 py-2 w-11/12 hover:bg-[#9db6b6] ml-1 rounded-lg font-semibold"
           onClick={(event) => handleClickTab(event, '/market')}
         >
           <FaShopify className="mr-5 text-3xl" />
           <span>Market</span>
+        </button>
+
+        <button
+          className="flex items-center px-6 py-2 w-11/12 hover:bg-[#9db6b6] ml-1 rounded-lg font-semibold"
+          onClick={(event) => handleClickTab(event, '/account')}
+        >
+          <FaMale className="mr-5 text-3xl" />
+          <span>Account</span>
         </button>
       </div>
 
