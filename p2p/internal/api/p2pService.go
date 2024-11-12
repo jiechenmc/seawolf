@@ -439,3 +439,12 @@ func (s *P2PService) AcceptChatRequest(peerID string, chatID int) (*ChatRoom, er
     }
     return s.chatNode.AcceptRequest(peerID, chatID)
 }
+
+func (s *P2PService) CloseChat(peerID string, chatID int) (*ChatRoom, error) {
+    if s.username == nil || s.chatNode == nil {
+        log.Printf("Attempted to get accept chat request when not logged in\n")
+        return nil, notLoggedIn
+    }
+    return s.chatNode.CloseChat(peerID, chatID)
+}
+

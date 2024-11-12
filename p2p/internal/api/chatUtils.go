@@ -43,8 +43,9 @@ type Message struct {
 type ChatRequest struct {
     RequestID int       `json:"request_id"`
     PeerID peer.ID      `json:"peer_id"`
-    FileCid cid.Cid     `json:"file_cid"`
+    FileCidStr string   `json:"file_cid"`
     Status string       `json:"status"`
+    fileCid cid.Cid
     stream *P2PStream
 }
 
@@ -52,9 +53,10 @@ type ChatRoom struct {
     ChatID int          `json:"chat_id"`
     Buyer peer.ID       `json:"buyer"`
     Seller peer.ID      `json:"seller"`
-    FileCid cid.Cid     `json:"file_cid"`
+    FileCidStr string   `json:"file_cid"`
     Messages []Message  `json:"messages"`
     Status string       `json:"status"`
+    fileCid cid.Cid
     chatLock sync.Mutex
     stream *P2PStream
 }
@@ -123,7 +125,7 @@ func (cn *ChatNode) handleChatRequest(ctx context.Context, stream *P2PStream) er
     if err != nil {
         return err
     }
-    fileCid, err := cid.Decode(fileCidStr)
+    fileCid, err := cid.Decode(fileCidStr[:len(fileCidStr) - 1])
     if err != nil {
         return err
     }
@@ -161,21 +163,23 @@ func (cn *ChatNode) AcceptRequest(peerIDStr string, reqID int) (*ChatRoom, error
     cn.incomingRequestsLock.Lock()
     peerRequests, ok := cn.incomingRequests[peerID]
     if ok {
-        request := peerRequests[reqID]
-        if request.Status == ACCEPTED {
-            request.Status = ACCEPTED
-            cn.incomingRequestsLock.Unlock()
+        request, ok := peerRequests[reqID]
+        if ok {
+            if request.Status != ACCEPTED {
+                request.Status = ACCEPTED
+                cn.incomingRequestsLock.Unlock()
 
-            var builder strings.Builder
-            builder.WriteString(fmt.Sprintf("ACCEPT\n%d\n", reqID))
-            err = request.stream.SendString(builder.String())
-            if err != nil {
-                cn.ResolveIncomingRequest(reqID, peerID, DECLINED)
-                return nil, err
+                var builder strings.Builder
+                builder.WriteString(fmt.Sprintf("ACCEPT\n%d\n", reqID))
+                err = request.stream.SendString(builder.String())
+                if err != nil {
+                    cn.ResolveIncomingRequest(reqID, peerID, DECLINED)
+                    return nil, err
+                }
+                cn.ResolveIncomingRequest(reqID, peerID, ACCEPTED)
+                chatRoom := cn.CreateChatRoom(reqID, peerID, cn.host.ID(), request.fileCid, request.stream)
+                return chatRoom, nil
             }
-            cn.ResolveIncomingRequest(reqID, peerID, ACCEPTED)
-            chatRoom := cn.CreateChatRoom(reqID, peerID, cn.host.ID(), request.FileCid, request.stream)
-            return chatRoom, nil
         }
     }
     cn.incomingRequestsLock.Unlock()
@@ -229,6 +233,7 @@ func (cn *ChatNode) SendRequest(ctx context.Context, providerIDStr string, fileC
             }
             cn.ResolveOutgoingRequest(currChatID, ACCEPTED)
             cn.CreateChatRoom(respChatID, cn.host.ID(), providerID, fileCid, stream)
+            return
         } else {
             goto declined
         }
@@ -275,8 +280,15 @@ func (cn *ChatNode) SendMessage(remotePeerIDStr string, chatID int, text string)
         return nil, chatNotFound
     }
 
+    chat.chatLock.Lock()
+    if chat.Status != ONGOING {
+        chat.chatLock.Unlock()
+        return nil, chatNotOngoing
+    }
+    chat.chatLock.Unlock()
+
     var builder strings.Builder
-    builder.WriteString(fmt.Sprintf("MESSAGE\n%d\n%s\n", chatID, text))
+    builder.WriteString(fmt.Sprintf("MESSAGE\n%s\n", text))
 
     err = chat.stream.SendString(builder.String())
     if err != nil {
@@ -285,17 +297,17 @@ func (cn *ChatNode) SendMessage(remotePeerIDStr string, chatID int, text string)
     message := Message{
         Timestamp: time.Now().UTC(),
         From: remotePeerID,
-        Text: text[:len(text) - 1],
+        Text: text,
     }
     chat.Messages = append(chat.Messages, message)
 
     return &message, nil
 }
 
-func (cn *ChatNode) CloseChat(remotePeerIDStr string, chatID int) error {
+func (cn *ChatNode) CloseChat(remotePeerIDStr string, chatID int) (*ChatRoom, error) {
     chat, err := cn.GetChat(remotePeerIDStr, chatID)
     if err != nil {
-        return err
+        return nil, err
     }
     chat.chatLock.Lock()
     defer chat.chatLock.Unlock()
@@ -304,12 +316,12 @@ func (cn *ChatNode) CloseChat(remotePeerIDStr string, chatID int) error {
         if err != nil {
             chat.Status = ERROR
             chat.Close()
-            return err
+            return nil, err
         }
         chat.Status = FINISHED
-        return nil
+        return chat, nil
     } else {
-        return chatNotOngoing
+        return nil, chatNotOngoing
     }
 }
 
@@ -353,7 +365,8 @@ func (cn *ChatNode) CreateChatRoom(id int, buyer peer.ID, seller peer.ID, fileCi
         ChatID: id,
         Buyer: buyer,
         Seller: seller,
-        FileCid: fileCid,
+        fileCid: fileCid,
+        FileCidStr: fileCid.String(),
         Messages: []Message{},
         Status: ONGOING,
         stream: p2pStream,
@@ -374,7 +387,8 @@ func (cn *ChatNode) CreateOutgoingRequest(id int, fileCid cid.Cid, p2pStream *P2
     request := &ChatRequest{
         RequestID: id,
         PeerID: p2pStream.RemotePeerID,
-        FileCid: fileCid,
+        fileCid: fileCid,
+        FileCidStr: fileCid.String(),
         Status: PENDING,
         stream: p2pStream,
     }
@@ -396,22 +410,34 @@ func (cn *ChatNode) ResolveOutgoingRequest(id int, status string) {
     }
 }
 
+func (cn *ChatNode) GetOutgoingRequests() []*ChatRequest {
+    requests := []*ChatRequest{}
+    cn.outgoingRequestsLock.Lock()
+    defer cn.outgoingRequestsLock.Unlock()
+    for _, request := range cn.outgoingRequests {
+        requests = append(requests, request)
+    }
+    return requests
+}
+
 func (cn *ChatNode) CreateIncomingRequest(id int, fileCid cid.Cid, p2pStream *P2PStream) *ChatRequest {
     request := &ChatRequest{
         RequestID: id,
         PeerID: p2pStream.RemotePeerID,
-        FileCid: fileCid,
+        fileCid: fileCid,
+        FileCidStr: fileCid.String(),
         stream: p2pStream,
         Status: PENDING,
     }
     cn.incomingRequestsLock.Lock()
     defer cn.incomingRequestsLock.Unlock()
     peerRequests, ok := cn.incomingRequests[p2pStream.RemotePeerID]
-    if ok {
-        peerRequests[id] = request
-        return request
+    if !ok {
+        peerRequests = make(map[int]*ChatRequest)
+        cn.incomingRequests[p2pStream.RemotePeerID] = peerRequests
     }
-    return nil
+    peerRequests[id] = request
+    return request
 }
 
 func (cn *ChatNode) ResolveIncomingRequest(id int, peerID peer.ID, status string) {
@@ -427,16 +453,6 @@ func (cn *ChatNode) ResolveIncomingRequest(id int, peerID peer.ID, status string
             }
         }
     }
-}
-
-func (cn *ChatNode) GetOutgoingRequests() []*ChatRequest {
-    requests := []*ChatRequest{}
-    cn.outgoingRequestsLock.Lock()
-    defer cn.outgoingRequestsLock.Unlock()
-    for _, request := range cn.outgoingRequests {
-        requests = append(requests, request)
-    }
-    return requests
 }
 
 func (cn *ChatNode) GetIncomingRequests() []*ChatRequest {
