@@ -24,6 +24,7 @@ type P2PService struct {
     p2pHost *host.Host
     kadDHT *dht.IpfsDHT
     fsNode *FileShareNode
+    chatNode *ChatNode
     exchange *bitswap.Bitswap
     bstore *blockstore.Blockstore
     messages chan string
@@ -186,6 +187,7 @@ func (s *P2PService) Login( username string, password string) (string, error) {
     p2pSetupStreamHandlers(*s.p2pHost, s.kadDHT, s.messages)
 
     s.fsNode = FileShareNodeCreate(*s.p2pHost, s.kadDHT)
+    s.chatNode = ChatNodeCreate(*s.p2pHost, s.kadDHT, s.fsNode)
 
     return (*s.p2pHost).ID().String(), nil
 }
@@ -358,37 +360,9 @@ func (s *P2PService) FindProviders(cid string) ([]peer.AddrInfo, error) {
 
 }
 
-func (s *P2PService) GetMessage() (string, error) {
-    if s.username == nil {
-        log.Printf("Attempted to read messages when not logged in\n")
-        return "", notLoggedIn
-    }
-    select {
-        case message := <-s.messages:
-            return message, nil
-        default:
-            return "", nil
-    }
-}
-
-func (s *P2PService) SendMessage(peerID string, message string) (string, error) {
-    if s.username == nil {
-        log.Printf("Attempted to send a message when not logged in\n")
-        return "", notLoggedIn
-    }
-    ctx := context.Background()
-
-    err := p2pSendMessage(ctx, *s.p2pHost, peerID, message)
-    if err != nil {
-        return "", err
-    }
-
-    return "success", nil
-}
-
 func (s *P2PService) DiscoverFiles() ([]FileShareFileDiscoveryInfo, error) {
     if s.username == nil || s.fsNode == nil {
-        log.Printf("Attempted to put file when not logged in\n")
+        log.Printf("Attempted to discover files when not logged in\n")
         return nil, notLoggedIn
     }
     return s.fsNode.Discover(context.Background()), nil
@@ -396,8 +370,81 @@ func (s *P2PService) DiscoverFiles() ([]FileShareFileDiscoveryInfo, error) {
 
 func (s *P2PService) DiscoverFile(reqCid string) (*FileShareFileDiscoveryInfo, error) {
     if s.username == nil || s.fsNode == nil {
-        log.Printf("Attempted to put file when not logged in\n")
+        log.Printf("Attempted to discover file when not logged in\n")
         return nil, notLoggedIn
     }
     return s.fsNode.GetFileDiscoveryInfo(context.Background(), reqCid)
 }
+
+func (s *P2PService) GetChat(peerID string, chatID int) (*ChatRoom, error) {
+    if s.username == nil || s.chatNode == nil {
+        log.Printf("Attempted to get chat when not logged in\n")
+        return nil, notLoggedIn
+    }
+    return s.chatNode.GetChat(peerID, chatID)
+}
+
+func (s *P2PService) GetChats() ([]*ChatRoom, error) {
+    if s.username == nil || s.chatNode == nil {
+        log.Printf("Attempted to get chats when not logged in\n")
+        return nil, notLoggedIn
+    }
+    return s.chatNode.GetChats(), nil
+}
+
+func (s *P2PService) GetMessages(peerID string, chatID int) ([]Message, error) {
+    if s.username == nil || s.chatNode == nil {
+        log.Printf("Attempted to get messages when not logged in\n")
+        return nil, notLoggedIn
+    }
+    return s.chatNode.GetMessages(peerID, chatID)
+}
+
+func (s *P2PService) SendMessage(peerID string, chatID int, text string) (*Message, error) {
+    if s.username == nil || s.chatNode == nil {
+        log.Printf("Attempted to send message when not logged in\n")
+        return nil, notLoggedIn
+    }
+    return s.chatNode.SendMessage(peerID, chatID, text)
+}
+
+func (s *P2PService) GetIncomingChatRequests() ([]*ChatRequest, error) {
+    if s.username == nil || s.chatNode == nil {
+        log.Printf("Attempted to get incoming chat requests when not logged in\n")
+        return nil, notLoggedIn
+    }
+    return s.chatNode.GetIncomingRequests(), nil
+}
+
+func (s *P2PService) GetOutgoingChatRequests() ([]*ChatRequest, error) {
+    if s.username == nil || s.chatNode == nil {
+        log.Printf("Attempted to get outgoing chat requests when not logged in\n")
+        return nil, notLoggedIn
+    }
+    return s.chatNode.GetOutgoingRequests(), nil
+}
+
+func (s *P2PService) SendChatRequest(peerID string, fileCid string) (*ChatRequest, error) {
+    if s.username == nil || s.chatNode == nil {
+        log.Printf("Attempted to get send chat request when not logged in\n")
+        return nil, notLoggedIn
+    }
+    return s.chatNode.SendRequest(context.Background(), peerID, fileCid)
+}
+
+func (s *P2PService) AcceptChatRequest(peerID string, chatID int) (*ChatRoom, error) {
+    if s.username == nil || s.chatNode == nil {
+        log.Printf("Attempted to get accept chat request when not logged in\n")
+        return nil, notLoggedIn
+    }
+    return s.chatNode.AcceptRequest(peerID, chatID)
+}
+
+func (s *P2PService) CloseChat(peerID string, chatID int) (*ChatRoom, error) {
+    if s.username == nil || s.chatNode == nil {
+        log.Printf("Attempted to get accept chat request when not logged in\n")
+        return nil, notLoggedIn
+    }
+    return s.chatNode.CloseChat(peerID, chatID)
+}
+

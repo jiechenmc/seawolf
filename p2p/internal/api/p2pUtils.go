@@ -23,12 +23,15 @@ import (
     record "github.com/libp2p/go-libp2p-record"
 )
 
-/* CODE FROM TA TUTORIAL */
-
 type PeerStatus struct {
     PeerID peer.ID              `json:"peer_id"`
     Addrs []multiaddr.Multiaddr `json:"addrs,omitempty"`
     IsConnected bool            `json:"is_connected"`
+}
+
+type P2PHost struct {
+    host host.Host
+    kadDHT *dht.IpfsDHT
 }
 
 type CustomValidator struct{}
@@ -426,7 +429,7 @@ func (s *P2PStream) Send(bytes []byte) error {
 failed:
     if err != nil {
         log.Printf("%v: Failed to write to stream. %v\n", (*s.NetworkStream).Protocol(), err)
-        return err
+        return internalError
     }
     return nil
 }
@@ -440,7 +443,7 @@ func (s *P2PStream) SendString(str string) error {
 failed:
     if err != nil {
         log.Printf("%v: Failed to write string to stream. %v\n", (*s.NetworkStream).Protocol(), err)
-        return err
+        return internalError
     }
     return nil
 }
@@ -456,7 +459,10 @@ func (s *P2PStream) Read(n int, timeout time.Duration) ([]byte, error) {
         bytes[i], err = s.ReadWriter.ReadByte()
         if err != nil {
             log.Printf("%v: Failed to read from stream. %v\n", (*s.NetworkStream).Protocol(), err)
-            return []byte{}, err
+            if err == context.DeadlineExceeded {
+                return nil, timeoutError
+            }
+            return nil, err
         }
     }
     return bytes, nil
@@ -470,7 +476,10 @@ func (s *P2PStream) ReadString(delim byte, timeout time.Duration) (string, error
     //Return an error even encountering EOF, the delimiter should be part of protocol
     if err != nil {
         log.Printf("%v: Failed to read string from stream. %v\n", (*s.NetworkStream).Protocol(), err)
-        return "", err
+        if err == context.DeadlineExceeded {
+            return "", timeoutError
+        }
+        return "", internalError
     }
     return str, nil
 }
