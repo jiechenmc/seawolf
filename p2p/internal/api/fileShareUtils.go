@@ -203,55 +203,57 @@ func FileShareNodeCreate(node host.Host, kadDHT *dht.IpfsDHT) *FileShareNode {
         rSessionStoreLock: sync.Mutex{},
     }
 
-    node.SetStreamHandler(fileShareProtocol, func(s network.Stream) {
-        stream := p2pWrapStream(&s)
-        defer stream.Close()
-        for {
-            req, err := stream.ReadString('\n', fileShareIdleTimeout)
-            if err != nil {
-                return
-            }
-
-            switch req {
-                case "WANT HAVE\n":
-                    err = fsNode.handleWantHave(context.Background(), stream)
-                    if err != nil {
-                        return
-                    }
-                case "WANT META\n":
-                    err = fsNode.handleWantMeta(context.Background(), stream)
-                    if err != nil {
-                        return
-                    }
-                case "WANT DATA\n":
-                    err = fsNode.handleWantData(context.Background(), stream)
-                    if err != nil {
-                        return
-                    }
-                case "PAUSE\n":
-                    err = fsNode.handlePause(stream)
-                    if err != nil {
-                        return
-                    }
-                case "RESUME\n":
-                    err = fsNode.handleResume(stream)
-                    if err != nil {
-                        return
-                    }
-                case "DISCOVER\n":
-                    err = fsNode.handleDiscover(stream)
-                    if err != nil {
-                        return
-                    }
-                case "CLOSE\n":
-                    return
-                default:
-                    return
-            }
-        }
-    })
+    node.SetStreamHandler(fileShareProtocol, fsNode.fileShareStreamHandler)
 
     return fsNode
+}
+
+func (f *FileShareNode) fileShareStreamHandler(s network.Stream) {
+    stream := p2pWrapStream(&s)
+    defer stream.Close()
+    for {
+        req, err := stream.ReadString('\n', fileShareIdleTimeout)
+        if err != nil {
+            return
+        }
+
+        switch req {
+            case "WANT HAVE\n":
+                err = f.handleWantHave(context.Background(), stream)
+                if err != nil {
+                    return
+                }
+            case "WANT META\n":
+                err = f.handleWantMeta(context.Background(), stream)
+                if err != nil {
+                    return
+                }
+            case "WANT DATA\n":
+                err = f.handleWantData(context.Background(), stream)
+                if err != nil {
+                    return
+                }
+            case "PAUSE\n":
+                err = f.handlePause(stream)
+                if err != nil {
+                    return
+                }
+            case "RESUME\n":
+                err = f.handleResume(stream)
+                if err != nil {
+                    return
+                }
+            case "DISCOVER\n":
+                err = f.handleDiscover(stream)
+                if err != nil {
+                    return
+                }
+            case "CLOSE\n":
+                return
+            default:
+                return
+        }
+    }
 }
 
 //Request:  "WANT HAVE\n<count>\n<cid1>\n<cid2>\n..."
@@ -629,6 +631,14 @@ func (f *FileShareNode) ResumeSession(sessionID int) error {
 
     session.ResumeSession()
     return nil
+}
+
+func (f *FileShareNode) HasFile(fileCid cid.Cid) bool {
+    has, err := f.bstore.Has(context.Background(), fileCid)
+    if err != nil {
+        return false
+    }
+    return has
 }
 
 func (s *FileShareSession) GetStream(peerID peer.ID) (*P2PStream, error) {
