@@ -17,6 +17,7 @@ type fileType = {
   name: string
   size: number
   cost: number
+  selectStatus: boolean
 }
 
 function Upload(): JSX.Element {
@@ -103,7 +104,8 @@ function Upload(): JSX.Element {
           cid: generateRandom10DigitNumber(),
           name: file.name,
           size: file.size / 1e6,
-          cost: 0
+          cost: 0,
+          selectStatus: true
         }
         filesToAppend.push(newFile)
       })
@@ -132,41 +134,44 @@ function Upload(): JSX.Element {
     }
   }
 
-  const handleCostConfirm = () => {
-    let idx: number = fileQueueIndex
-    fileQueue[idx].cost = fileCost
-    setFileQueueIndex(idx + 1)
+  const handleCostConfirm = (fileQueue) => {
+    // let idx: number = fileQueueIndex
+    // fileQueue[idx].cost = fileCost
+    // setFileQueueIndex(idx + 1)
 
-    if (idx + 1 === fileQueue.length) {
-      setNumBytes((prevBytes: number) => prevBytes + byteCount)
-      setNumFiles((prevFiles: number) => prevFiles + fileCount)
-      setListOfFiles((prevList: fileType[]) => prevList.concat(fileQueue))
-      setFilesToView((prevList: fileType[]) => prevList.concat(fileQueue))
+    // if (idx + 1 === fileQueue.length) {
+    //   setNumBytes((prevBytes: number) => prevBytes + byteCount)
+    //   setNumFiles((prevFiles: number) => prevFiles + fileCount)
+    //   setListOfFiles((prevList: fileType[]) => prevList.concat(fileQueue))
+    //   setFilesToView((prevList: fileType[]) => prevList.concat(fileQueue))
 
-      setHistoryView((prevView) => {
-        const newHistory = fileQueue.map((file) => ({
-          date: new Date(),
-          file: file,
-          type: 'uploaded',
-          proxy: 'self'
-        }))
+    //   setHistoryView((prevView) => {
+    //     const newHistory = fileQueue.map((file) => ({
+    //       date: new Date(),
+    //       file: file,
+    //       type: 'uploaded',
+    //       proxy: 'self'
+    //     }))
 
-        return [...newHistory, ...prevView]
-      })
+    //     return [...newHistory, ...prevView]
+    //   })
 
-      handleCostCancelAll()
-    }
+    //   handleCostCancelAll()
+    // }
 
+    // setFileCost(0)
+    setNumBytes(() => byteCount)
+    setNumFiles(() => fileCount)
+    setListOfFiles((prevList: fileType[]) => prevList.concat(fileQueue))
+    setFilesToView((prevList: fileType[]) => prevList.concat(fileQueue))
     setFileCost(0)
+    setShowCostModal(false)
   }
 
   const handleCostCancelAll = () => {
-    setFileCount(0)
-    setByteCount(0)
     setFileQueueIndex(0)
-    setfileQueue([])
-    setShowCostModal(false)
     setFileCost(0)
+    setShowCostModal(false)
   }
 
   const handleCostCancelOne = () => {
@@ -293,7 +298,7 @@ function Upload(): JSX.Element {
           </div>
         ))}
 
-        {showCostModal && (
+        {/* {showCostModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center">
             <div className="bg-white p-6 rounded-lg shadow-lg w-1/3">
               <h2 className="text-l font-bold mb-4">
@@ -332,6 +337,102 @@ function Upload(): JSX.Element {
                   className="bg-[#737fa3] hover:bg-[#7c85a3] text-white px-4 py-2 rounded-lg"
                 >
                   Confirm Cost
+                </button>
+              </div>
+            </div>
+          </div>
+        )} */}
+        {showCostModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center">
+            <div className="bg-white p-6 rounded-lg shadow-lg w-1/2">
+              <h2 className="text-xl font-bold mb-4">Set Costs for Uploaded Files</h2>
+              <div className="overflow-y-auto max-h-80">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr>
+                      <th className="px-2 py-2">
+                        <input
+                          type="checkbox"
+                          checked={fileQueue.every((file) => file.selectStatus)}
+                          onChange={(e) =>
+                            setfileQueue(
+                              fileQueue.map((file) => ({
+                                ...file,
+                                selectStatus: e.target.checked
+                              }))
+                            )
+                          }
+                        />
+                      </th>
+                      <th className="px-4 py-2">File Name</th>
+                      <th className="px-4 py-2">Size (MB)</th>
+                      <th className="px-4 py-2">Cost (SWE)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {fileQueue.map((file, index) => (
+                      <tr key={index} className="border-b">
+                        <td className="px-2 py-2">
+                          <input
+                            type="checkbox"
+                            checked={file.selectStatus ?? true}
+                            onChange={(e) =>
+                              setfileQueue((prevQueue) =>
+                                prevQueue.map((f, i) =>
+                                  i === index ? { ...f, selectStatus: e.target.checked } : f
+                                )
+                              )
+                            }
+                          />
+                        </td>
+                        <td className="px-4 py-2 relative group">
+                          {/* Truncate file name */}
+                          {file.name.length > 20 ? `${file.name.slice(0, 20)}...` : file.name}
+
+                          {/* Tooltip */}
+                          <div className="absolute bottom-3 left-2 transform translate-y-full bg-gray-700 text-white text-sm rounded-lg p-2 opacity-0 group-hover:opacity-100 transition-opacity duration-100 delay-50 pointer-events-none">
+                            {file.name}
+                          </div>
+                        </td>
+                        <td className="px-4 py-2">
+                          {file.size.toLocaleString(undefined, {
+                            minimumFractionDigits: 0,
+                            maximumFractionDigits: 6
+                          })}
+                        </td>
+                        <td className="px-4 py-2">
+                          <input
+                            type="number"
+                            value={file.cost}
+                            onChange={(e) => {
+                              const updatedCost = parseFloat(e.target.value) || 0
+                              setfileQueue((prevQueue) =>
+                                prevQueue.map((f, i) =>
+                                  i === index ? { ...f, cost: updatedCost } : f
+                                )
+                              )
+                            }}
+                            placeholder="Enter cost"
+                            className="border border-gray-300 rounded-lg p-2 w-full"
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex justify-end mt-4">
+                <button
+                  onClick={handleCostCancelAll}
+                  className="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded-lg mr-2"
+                >
+                  Cancel All
+                </button>
+                <button
+                  onClick={() => handleCostConfirm(fileQueue.filter((file) => file.selectStatus))}
+                  className="bg-[#737fa3] hover:bg-[#7c85a3] text-white px-4 py-2 rounded-lg"
+                >
+                  Confirm Selected
                 </button>
               </div>
             </div>

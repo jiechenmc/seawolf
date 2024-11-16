@@ -14,8 +14,35 @@ function Login(): JSX.Element {
 
   const navigate = useNavigate()
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
+    console.log('Cliked on button to login')
+
+    const loginRequest = {
+      jsonrpc: '2.0',
+      method: 'p2p_Login',
+      params: [username, password],
+      id: 1
+    }
+
+    const response = await fetch('http://localhost:8080/rpc', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(loginRequest)
+    })
+
+    if (response.ok) {
+      const data = await response.json()
+      if (data.error) {
+        console.log('Got error logging in')
+      } else {
+        console.log('Login successful')
+      }
+    } else {
+      console.error('Error calling p2p.Login')
+    }
 
     setWalletAddress(username)
     navigate('upload')
@@ -28,7 +55,7 @@ function Login(): JSX.Element {
           <img src={Logo} alt="Logo" className="w-2/12 h-2/12 mr-2" />
           <div className="text-center text-3xl font-bold">SeaWolf Exchange</div>
         </div>
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleLogin} className="space-y-6">
           <input
             type="text"
             placeholder="Wallet Address"
