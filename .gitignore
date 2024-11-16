@@ -29,3 +29,6 @@ dist
 out
 .DS_Store
 *.log*
+
+# testing directories
+downloadedFiles/
