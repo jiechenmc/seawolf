@@ -13,7 +13,7 @@ func main() {
 		socks5.WithLogger(socks5.NewLogger(log.New(os.Stdout, "socks5: ", log.LstdFlags))),
 	)
 
-	// Create SOCKS5 proxy on localhost port 8000
+	// Create SOCKS5 proxy on localhost port 8082
 	if err := server.ListenAndServe("tcp", ":8082"); err != nil {
 		panic(err)
 	}
