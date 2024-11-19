@@ -7,18 +7,19 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
-	"path/filepath"
 	"seawolf/coin/api"
 	"syscall"
 	"time"
 
-	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/rpcclient"
+	"github.com/creack/pty"
 )
 
 // -> Admin
@@ -46,23 +47,83 @@ func spawnBtcd(ctx context.Context) *exec.Cmd {
 
 func spawnWallet(ctx context.Context) *exec.Cmd {
 
-	cmd := exec.Command("btcwallet", "-u", os.Getenv("btcdusername"), "-P", os.Getenv("btcdpassword"))
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	//root/.btcwallet/mainnet/wallet.db
 
-	// Start the process in the background
-	err := cmd.Start()
-	if err != nil {
-		log.Fatalf("Failed to start btcwallet: %v", err)
+	var cmd *exec.Cmd
+
+	_, err := os.Stat("/root/.btcwallet/mainnet/wallet.db")
+
+	if !os.IsNotExist(err) {
+		cmd = exec.Command("btcwallet", "-u", os.Getenv("btcdusername"), "-P", os.Getenv("btcdpassword"))
+		err := cmd.Start()
+		if err != nil {
+			log.Fatalf("Failed to start cmd: %v", err)
+		}
+
+		log.Printf("btcwallet is running with PID %d", cmd.Process.Pid)
+
+		go func() {
+			<-ctx.Done()
+			log.Println("Shutting down btcwallet...")
+			cmd.Process.Signal(syscall.SIGKILL)
+		}()
+	} else {
+		cmd = exec.Command("btcwallet", "-u", os.Getenv("btcdusername"), "-P", os.Getenv("btcdpassword"), "--create")
+
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+
+		f, err := pty.Start(cmd)
+		if err != nil {
+			log.Fatalf("Failed to start pty: %v", err)
+		}
+
+		defer f.Close()
+
+		log.Println("Writing Password")
+		passphrase := "cse416\r"
+
+		if _, err := f.Write([]byte(passphrase)); err != nil {
+			log.Fatalf("Failed to write password: %v", err)
+		}
+		log.Println("Confirming Password")
+
+		if _, err := f.Write([]byte(passphrase)); err != nil {
+			log.Fatalf("Failed to confirm password: %v", err)
+		}
+		log.Println("ENCRYPTION")
+
+		if _, err := f.Write([]byte("no\r")); err != nil {
+			log.Fatalf("Failed to say no to encryption: %v", err)
+		}
+		log.Println("SEED")
+		if _, err := f.Write([]byte("no\r")); err != nil {
+			log.Fatalf("Failed to say no to seed: %v", err)
+		}
+
+		log.Println("Confirm seed is kept safe")
+		if _, err := f.Write([]byte("OK\r")); err != nil {
+			log.Fatalf("Failed to confirm wallet seed is kept safe: %v", err)
+		}
+
+		io.Copy(os.Stdout, f)
+
+		cmd = exec.Command("btcwallet", "-u", os.Getenv("btcdusername"), "-P", os.Getenv("btcdpassword"))
+		err = cmd.Start()
+		if err != nil {
+			log.Fatalf("Failed to start cmd: %v", err)
+		}
+
+		log.Printf("btcwallet is running with PID %d", cmd.Process.Pid)
+
+		go func() {
+			<-ctx.Done()
+			log.Println("Shutting down btcwallet...")
+			cmd.Process.Signal(syscall.SIGKILL)
+		}()
+
 	}
 
-	log.Printf("btcwallet is running with PID %d", cmd.Process.Pid)
-
-	go func() {
-		<-ctx.Done()
-		log.Println("Shutting down btcwallet...")
-		cmd.Process.Signal(syscall.SIGKILL)
-	}()
 	return cmd
 }
 
@@ -78,30 +139,38 @@ func main() {
 	spawnBtcd(ctx)
 	spawnWallet(ctx)
 
-	fmt.Println("Please wait 10 seconds for BTCD to start..., then will the http server be available.")
-	time.Sleep(10 * time.Second)
-
 	ntfnHandlers := rpcclient.NotificationHandlers{}
 
 	// Connect to local btcwallet RPC server using websockets.
-	certHomeDir := btcutil.AppDataDir("btcwallet", false)
-	certs, err := os.ReadFile(filepath.Join(certHomeDir, "rpc.cert"))
-	if err != nil {
-		log.Fatal(err)
+	// certHomeDir := btcutil.AppDataDir("btcwallet", false)
+	// certs, err := os.ReadFile(filepath.Join(certHomeDir, "rpc.cert"))
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+
+	for {
+		conn, err := net.DialTimeout("tcp", "localhost:8332", 2*time.Second)
+		if err == nil {
+			conn.Close()
+			break
+		}
+		fmt.Println("Waiting for btcwallet to be ready...")
+		time.Sleep(1 * time.Second)
 	}
+
 	connCfg := &rpcclient.ConnConfig{
-		Host:         "localhost:8332",
-		Endpoint:     "ws",
-		User:         "rpcuser",
-		Pass:         "rpcpass",
-		DisableTLS:   true,
-		Certificates: certs,
+		Host:       "localhost:8332",
+		Endpoint:   "ws",
+		User:       "rpcuser",
+		Pass:       "rpcpass",
+		DisableTLS: true,
+		// Certificates: certs,
 	}
 
 	client, err := rpcclient.New(connCfg, &ntfnHandlers)
 
 	if err != nil {
-		log.Fatal(err)
+		log.Panic(err)
 	}
 
 	app := &api.App{

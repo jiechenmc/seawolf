@@ -56,13 +56,13 @@ function Login(): JSX.Element {
           <div className="text-center text-3xl font-bold">SeaWolf Exchange</div>
         </div>
         <form onSubmit={handleLogin} className="space-y-6">
-          <input
+          {/* <input
             type="text"
             placeholder="Wallet Address"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-md"
-          />
+          /> */}
           <input
             type="password"
             placeholder="Password"

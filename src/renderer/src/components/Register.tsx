@@ -68,7 +68,7 @@ function Register(): JSX.Element {
           Register for a new account
         </div>
         <form>
-          <label className="block text-lg font-semibold text-gray-700 mb-1">
+          {/* <label className="block text-lg font-semibold text-gray-700 mb-1">
             Create New Wallet Address
           </label>
           <input
@@ -77,7 +77,7 @@ function Register(): JSX.Element {
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-md"
-          />
+          /> */}
           <label className="mt-6 block text-lg font-semibold text-gray-700 mb-1">
             Choose Password
           </label>
@@ -99,7 +99,7 @@ function Register(): JSX.Element {
             className={`w-full px-4 py-2 border rounded-lg shadow-md ${!passwordsMatch ? 'border-red-500' : 'border-gray-300'} focus:outline-none focus:ring-2 focus:ring-blue-500`}
           />
           {!passwordsMatch && <p className="text-red-500 text-sm mt-2">Passwords do not match</p>}
-          <label className="mt-6 block text-lg font-semibold text-gray-700 mb-1">
+          {/* <label className="mt-6 block text-lg font-semibold text-gray-700 mb-1">
             Choose a seed (default is random)
           </label>
           <input
@@ -108,7 +108,7 @@ function Register(): JSX.Element {
             value={seed}
             onChange={(e) => setSeed(e.target.value)}
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-md"
-          />
+          /> */}
           <div className="flex justify-center mt-10">
             <button
               type="button"

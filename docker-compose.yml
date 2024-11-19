@@ -9,12 +9,6 @@ services:
       - ./btcd/btcwallet.conf:/root/.btcwallet/btcwallet.conf
       - ./btcd/server/:/app/server
     tty: true
-    deploy:
-      resources:
-        limits:
-          cpus: '8.0'   # Restrict to 8 CPU cores
-        reservations:
-          cpus: '8.0'
 
 volumes:
   BTCWALLET:
