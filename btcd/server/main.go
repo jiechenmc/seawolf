@@ -22,8 +22,6 @@ import (
 	"github.com/creack/pty"
 )
 
-// -> Admin
-// createwallet <name> <passphrase>
 func spawnBtcd(ctx context.Context) *exec.Cmd {
 	cmd := exec.Command("btcd", "-a", "130.245.173.221:8333", "--miningaddr", "1AMMu8eiCkyNA6z7e4w12udCN95eBTaBq1")
 	cmd.Stdout = os.Stdout
@@ -45,7 +43,7 @@ func spawnBtcd(ctx context.Context) *exec.Cmd {
 	return cmd
 }
 
-func spawnWallet(ctx context.Context) *exec.Cmd {
+func spawnWallet(ctx context.Context, seed string) *exec.Cmd {
 
 	//root/.btcwallet/mainnet/wallet.db
 
@@ -96,9 +94,21 @@ func spawnWallet(ctx context.Context) *exec.Cmd {
 		if _, err := f.Write([]byte("no\r")); err != nil {
 			log.Fatalf("Failed to say no to encryption: %v", err)
 		}
-		log.Println("SEED")
-		if _, err := f.Write([]byte("no\r")); err != nil {
-			log.Fatalf("Failed to say no to seed: %v", err)
+
+		if seed != "" {
+			log.Println("SEED is Present")
+			if _, err := f.Write([]byte("yes\r")); err != nil {
+				log.Fatalf("Failed to say no to seed: %v", err)
+			}
+			log.Println("ENTERING SEED")
+			if _, err := f.Write([]byte(fmt.Sprintf("%s\r", seed))); err != nil {
+				log.Fatalf("Failed to say no to seed: %v", err)
+			}
+		} else {
+			log.Println("NO SEED")
+			if _, err := f.Write([]byte("no\r")); err != nil {
+				log.Fatalf("Failed to say no to seed: %v", err)
+			}
 		}
 
 		log.Println("Confirm seed is kept safe")
@@ -137,7 +147,7 @@ func main() {
 	defer stop()
 
 	spawnBtcd(ctx)
-	spawnWallet(ctx)
+	spawnWallet(ctx, "7b7c9fade5188ba23147fe16f03fa3426dbdfe5c5af0cb2512fea300f24f682e")
 
 	ntfnHandlers := rpcclient.NotificationHandlers{}
 
