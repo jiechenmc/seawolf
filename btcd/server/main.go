@@ -98,11 +98,11 @@ func spawnWallet(ctx context.Context, seed string) *exec.Cmd {
 		if seed != "" {
 			log.Println("SEED is Present")
 			if _, err := f.Write([]byte("yes\r")); err != nil {
-				log.Fatalf("Failed to say no to seed: %v", err)
+				log.Fatalf("Failed to say Yes to seed: %v", err)
 			}
 			log.Println("ENTERING SEED")
 			if _, err := f.Write([]byte(fmt.Sprintf("%s\r", seed))); err != nil {
-				log.Fatalf("Failed to say no to seed: %v", err)
+				log.Fatalf("Failed to enter seed: %v", err)
 			}
 		} else {
 			log.Println("NO SEED")
