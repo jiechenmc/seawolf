@@ -432,13 +432,22 @@ func (s *P2PService) SendChatRequest(peerID string, fileCid string) (*ChatReques
     return s.chatNode.SendRequest(context.Background(), peerID, fileCid)
 }
 
-func (s *P2PService) AcceptChatRequest(peerID string, chatID int) (*ChatRoom, error) {
+func (s *P2PService) AcceptChatRequest(peerID string, requestID int) (*ChatRoom, error) {
     if s.username == nil || s.chatNode == nil {
         log.Printf("Attempted to get accept chat request when not logged in\n")
         return nil, notLoggedIn
     }
-    return s.chatNode.AcceptRequest(peerID, chatID)
+    return s.chatNode.AcceptRequest(peerID, requestID)
 }
+
+func (s *P2PService) DeclineChatRequest(peerID string, requestID int) error {
+    if s.username == nil || s.chatNode == nil {
+        log.Printf("Attempted to get accept chat request when not logged in\n")
+        return notLoggedIn
+    }
+    return s.chatNode.DeclineRequest(peerID, requestID)
+}
+
 
 func (s *P2PService) CloseChat(peerID string, chatID int) (*ChatRoom, error) {
     if s.username == nil || s.chatNode == nil {

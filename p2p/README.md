@@ -213,3 +213,225 @@ SessionID: int - session ID of the requested session
 ```
 None
 ```
+
+## p2p_sendChatRequest
+Sends a request to chat to a provider of a file
+
+#### Parameters
+```
+peerID:     string - peer ID of the provider
+fileCid:    string - CID of the file
+```
+#### Returns
+```
+{
+    "request_id":   int     - request ID
+    "peer_id":      string  - peer ID of the provider
+    "file_cid":     string  - CID of the file
+    "status":       string  - status of the request("pending", "accepted", or "declined")
+}
+```
+
+## p2p_getIncomingChatRequests
+Get incoming chat requests
+
+#### Parameters
+```
+None
+```
+#### Returns
+```
+[
+    {
+        "request_id":   int     - request ID
+        "peer_id":      string  - peer ID of the requester
+        "file_cid":     string  - CID of the file
+        "status":       string  - status of the request("pending", "accepted", or "declined")
+    },
+    ...
+]
+```
+
+## p2p_getOutgoingChatRequests
+Get outgoing chat requests
+
+#### Parameters
+```
+None
+```
+#### Returns
+```
+[
+    {
+        "request_id":   int     - request ID
+        "peer_id":      string  - peer ID of the provider
+        "file_cid":     string  - CID of the file
+        "status":       string  - status of the request("pending", "accepted", or "declined")
+    },
+    ...
+]
+```
+
+## p2p_acceptChatRequest
+Accepts an incoming chat request
+
+#### Parameters
+```
+peerID:     string  - peer ID of the requester(request ID is only unique per requester)
+requestID:  int     - request ID
+```
+#### Returns
+```
+{
+    "chat_id":    int     - chat ID
+    "buyer":      string  - peer ID of the buyer(requester)
+    "seller":     string  - peer ID of the seller(this peer)
+    "file_cid":   string  - CID of the file
+    "status":     string  - status of the chat("ongoing", "finished", "timed out", or "error")
+    "messages": [
+        {
+            "timestamp":    string - UTC timestamp of message
+            "from":         string - peer ID of the sender
+            "text":         string - message text
+        },
+        ...
+    ]
+}
+```
+
+## p2p_declineChatRequest
+Declines an incoming chat request
+
+#### Parameters
+```
+peerID:     string  - peer ID of the requester(request ID is only unique per requester)
+requestID:  int     - request ID
+```
+#### Returns
+```
+None
+```
+
+## p2p_getChats
+Gets all chats
+
+#### Parameters
+```
+None
+```
+#### Returns
+```
+[
+    {
+        "chat_id":    int     - chat ID
+        "buyer":      string  - peer ID of the buyer
+        "seller":     string  - peer ID of the seller
+        "file_cid":   string  - CID of the file
+        "status":     string  - status of the chat("ongoing", "finished", "timed out", or "error")
+        "messages": [
+            {
+                "timestamp":    string - UTC timestamp of message
+                "from":         string - peer ID of the sender
+                "text":         string - message text
+            },
+            ...
+        ]
+    },
+    ...
+]
+
+```
+
+## p2p_getChat
+Get specific chat given chat id and remote peer id
+
+#### Parameters
+```
+None
+```
+#### Returns
+```
+{
+    "chat_id":    int     - chat ID
+    "buyer":      string  - peer ID of the buyer
+    "seller":     string  - peer ID of the seller
+    "file_cid":   string  - CID of the file
+    "status":     string  - status of the chat("ongoing", "finished", "timed out", or "error")
+    "messages": [
+        {
+            "timestamp":    string - UTC timestamp of message
+            "from":         string - peer ID of the sender
+            "text":         string - message text
+        },
+        ...
+    ]
+}
+```
+
+## p2p_sendMessage
+Sends a message within chat
+
+#### Parameters
+```
+PeerID  string  - remote peer ID
+ChatID  int     - chat ID
+Text    string  - message text
+```
+
+#### Returns
+```
+{
+    "timestamp":    string - UTC timestamp of message
+    "from":         string - peer ID of the sender
+    "text":         string - message text
+}
+```
+
+## p2p_getMessages
+Gets all messages within a chat
+
+#### Parameters
+```
+PeerID  string  - remote peer ID
+ChatID  int     - chat ID
+```
+
+#### Returns
+```
+[
+    {
+        "timestamp":    string - UTC timestamp of message
+        "from":         string - peer ID of the sender
+        "text":         string - message text
+    },
+    ...
+]
+```
+
+## p2p_closeChat
+Closes/ends an ongoing chat
+
+#### Parameters
+```
+PeerID  string  - remote peer ID
+ChatID  int     - chat ID
+```
+
+#### Returns
+```
+{
+    "chat_id":    int     - chat ID
+    "buyer":      string  - peer ID of the buyer
+    "seller":     string  - peer ID of the seller
+    "file_cid":   string  - CID of the file
+    "status":     string  - status of the chat("ongoing", "finished", "timed out", or "error")
+    "messages": [
+        {
+            "timestamp":    string - UTC timestamp of message
+            "from":         string - peer ID of the sender
+            "text":         string - message text
+        },
+        ...
+    ]
+}
+```

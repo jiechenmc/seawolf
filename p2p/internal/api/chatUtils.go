@@ -153,6 +153,38 @@ func (cn *ChatNode) handleChatRequest(ctx context.Context, stream *P2PStream) er
     }
 }
 
+func (cn *ChatNode) DeclineRequest(peerIDStr string, reqID int) error {
+    peerID, err := peer.Decode(peerIDStr)
+    if err != nil {
+        log.Printf("Failed to decode peer ID string '%v'. %v\n", peerIDStr, err)
+        return invalidParams
+    }
+
+    cn.incomingRequestsLock.Lock()
+    peerRequests, ok := cn.incomingRequests[peerID]
+    if ok {
+        request, ok := peerRequests[reqID]
+        if ok {
+            if request.Status == PENDING {
+                request.Status = DECLINED
+                cn.incomingRequestsLock.Unlock()
+
+                var builder strings.Builder
+                builder.WriteString(fmt.Sprintf("DECLINE\n%d\n", reqID))
+                err = request.stream.SendString(builder.String())
+                if err != nil {
+                    cn.ResolveIncomingRequest(reqID, peerID, DECLINED)
+                    return err
+                }
+                cn.ResolveIncomingRequest(reqID, peerID, DECLINED)
+                return nil
+            }
+        }
+    }
+    cn.incomingRequestsLock.Unlock()
+    return requestNotFound
+}
+
 func (cn *ChatNode) AcceptRequest(peerIDStr string, reqID int) (*ChatRoom, error) {
     peerID, err := peer.Decode(peerIDStr)
     if err != nil {
@@ -165,7 +197,7 @@ func (cn *ChatNode) AcceptRequest(peerIDStr string, reqID int) (*ChatRoom, error
     if ok {
         request, ok := peerRequests[reqID]
         if ok {
-            if request.Status != ACCEPTED {
+            if request.Status == PENDING {
                 request.Status = ACCEPTED
                 cn.incomingRequestsLock.Unlock()
 
