@@ -8,9 +8,10 @@ type fileType = {
   fileCost: number
   uploadEta?: number
   uploadStatus?: 'uploading' | 'completed' | 'cancelled' | 'error' | null
-  fileDownloadPath: string
+  fileDownloadPath?: string
   downloadEta?: number
   downloadStatus?: 'downloading' | 'completed' | 'cancelled' | 'error' | null
+  selectStatus?: boolean
 }
 
 // type fileType = {
@@ -97,7 +98,7 @@ const AppContext = createContext<any>(null)
 
 const AppProvider = ({ children }) => {
   const [walletAddress, setWalletAddress] = useState<string | null>(null)
-  
+
   const [numUploadedFiles, setNumUploadedFiles] = useState<number>(0)
   const [numUploadedBytes, setNumUploadedBytes] = useState<number>(0)
 
@@ -124,8 +125,6 @@ const AppProvider = ({ children }) => {
         numUploadFiles: [numUploadedFiles, setNumUploadedFiles],
         numUploadBytes: [numUploadedBytes, setNumUploadedBytes],
         uploadFiles: [uploadedFiles, setUploadedFiles],
-        // viewFiles: [filesToView, setFilesToView],
-        // search: [searchHash, setSeearchHash],
         downloadFiles: [downloadedFiles, setDownloadedFiles],
         proxy: [currProxy, setCurrProxy],
         proxies: [listOfProxies, setListOfProxies],

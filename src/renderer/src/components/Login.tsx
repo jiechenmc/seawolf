@@ -18,31 +18,31 @@ function Login(): JSX.Element {
     e.preventDefault()
     console.log('Cliked on button to login')
 
-    const loginRequest = {
-      jsonrpc: '2.0',
-      method: 'p2p_Login',
-      params: [username, password],
-      id: 1
-    }
+    // const loginRequest = {
+    //   jsonrpc: '2.0',
+    //   method: 'p2p_Login',
+    //   params: [username, password],
+    //   id: 1
+    // }
 
-    const response = await fetch('http://localhost:8080/rpc', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(loginRequest)
-    })
+    // const response = await fetch('http://localhost:8080/rpc', {
+    //   method: 'POST',
+    //   headers: {
+    //     'Content-Type': 'application/json'
+    //   },
+    //   body: JSON.stringify(loginRequest)
+    // })
 
-    if (response.ok) {
-      const data = await response.json()
-      if (data.error) {
-        console.log('Got error logging in')
-      } else {
-        console.log('Login successful')
-      }
-    } else {
-      console.error('Error calling p2p.Login')
-    }
+    // if (response.ok) {
+    //   const data = await response.json()
+    //   if (data.error) {
+    //     console.log('Got error logging in')
+    //   } else {
+    //     console.log('Login successful')
+    //   }
+    // } else {
+    //   console.error('Error calling p2p.Login')
+    // }
 
     setWalletAddress(username)
     navigate('upload')

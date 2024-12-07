@@ -1,11 +1,25 @@
 import React, { useState } from 'react'
 import { AppContext } from '../AppContext'
 
-type FileType = {
+// type FileType = {
+//   cid: number
+//   name: string
+//   size: number
+//   cost: number
+// }
+
+type fileType = {
   cid: number
-  name: string
-  size: number
-  cost: number
+  fileUploadPath?: string
+  fileName: string
+  fileSize: number
+  fileCost: number
+  uploadEta?: number
+  uploadStatus?: 'uploading' | 'completed' | 'cancelled' | 'error' | null
+  fileDownloadPath?: string
+  downloadEta?: number
+  downloadStatus?: 'downloading' | 'completed' | 'cancelled' | 'error' | null
+  selectStatus?: boolean
 }
 
 type ListingType = {
@@ -19,19 +33,19 @@ type ListingType = {
 }
 
 const CreateListingContent = () => {
-  const { allFiles, downloadFiles } = React.useContext(AppContext)
+  const { uploadFiles, downloadFiles } = React.useContext(AppContext)
   const {
     marketListing: [marketListings, setMarketListings],
     userListing: [userListings, setUserListings]
   } = React.useContext(AppContext)
-  const [listOfFiles] = allFiles
+  const [uploadedFiles] = uploadFiles
   const [downloadedFiles] = downloadFiles
 
-  const filesForMarket = listOfFiles.concat(
-    downloadedFiles.filter((file) => file.status === 'Done').map((file) => file.file)
+  const filesForMarket = uploadedFiles.concat(
+    downloadedFiles.filter((file) => file.status === 'completed').map((file) => file.file)
   )
 
-  const [selectedFile, setSelectedFile] = useState<FileType | null>(null)
+  const [selectedFile, setSelectedFile] = useState<fileType | null>(null)
   const [cost, setCost] = useState<number>(0)
   const [endDate, setEndDate] = useState<string>('')
   const [listingType, setListingType] = useState<'sale' | 'auction'>('sale')
@@ -74,8 +88,8 @@ const CreateListingContent = () => {
 
     const newListing: ListingType = {
       cid: selectedFile.cid,
-      name: selectedFile.name,
-      size: selectedFile.size,
+      name: selectedFile.fileName,
+      size: selectedFile.fileSize,
       cost: cost,
       endDate: endDate,
       type: listingType,
@@ -108,9 +122,9 @@ const CreateListingContent = () => {
               }}
             >
               <option value="">Select a file</option>
-              {filesForMarket.map((file: FileType) => (
+              {filesForMarket.map((file: fileType) => (
                 <option key={file.cid} value={file.cid}>
-                  {file.name} ({file.size} MB)
+                  {file.fileName} ({file.fileSize} MB)
                 </option>
               ))}
             </select>
@@ -197,11 +211,11 @@ const CreateListingContent = () => {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <p className="text-sm text-gray-500">File Name</p>
-              <p className="font-medium">{selectedFile.name}</p>
+              <p className="font-medium">{selectedFile.fileName}</p>
             </div>
             <div>
               <p className="text-sm text-gray-500">Size</p>
-              <p className="font-medium">{selectedFile.size.toFixed(2)} MB</p>
+              <p className="font-medium">{selectedFile.fileSize.toFixed(2)} MB</p>
             </div>
             <div>
               <p className="text-sm text-gray-500">File ID</p>

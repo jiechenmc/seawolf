@@ -12,26 +12,41 @@ import { LuFileText, LuFileType } from 'react-icons/lu'
 import { BsFiletypeMp4, BsFiletypeMp3, BsFiletypePng, BsFiletypeJpg } from 'react-icons/bs'
 import { AppContext } from '../AppContext'
 
+// type fileType = {
+//   cid: number
+//   name: string
+//   size: number
+//   cost: number
+//   selectStatus: boolean
+// }
+
 type fileType = {
   cid: number
-  name: string
-  size: number
-  cost: number
-  selectStatus: boolean
+  fileUploadPath?: string
+  fileName: string
+  fileSize: number
+  fileCost: number
+  uploadEta?: number
+  uploadStatus?: 'uploading' | 'completed' | 'cancelled' | 'error' | null
+  fileDownloadPath?: string
+  downloadEta?: number
+  downloadStatus?: 'downloading' | 'completed' | 'cancelled' | 'error' | null
+  selectStatus?: boolean
 }
 
 function Upload(): JSX.Element {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
-  const { totalFiles, totalBytes, allFiles, viewFiles, search, history } =
-    React.useContext(AppContext)
+  const { uploadFiles, numUploadFiles, numUploadBytes, history } = React.useContext(AppContext)
 
-  const [numFiles, setNumFiles] = totalFiles
-  const [numBytes, setNumBytes] = totalBytes
-  const [listOfFiles, setListOfFiles] = allFiles
-  const [filesToView, setFilesToView] = viewFiles
-  const [searchHash, setSearchHash] = search
+  const [uploadedFiles, setUploadedFiles] = uploadFiles
+  const [numFiles, setNumFiles] = numUploadFiles
+  const [numBytes, setNumBytes] = numUploadBytes
+
   const [historyView, setHistoryView] = history
+
+  const [filesToView, setFilesToView] = useState<fileType[]>(uploadedFiles)
+  const [searchHash, setSearchHash] = useState<string>('')
 
   const [fileQueue, setfileQueue] = useState<fileType[]>([])
   const [fileQueueIndex, setFileQueueIndex] = useState<number>(0)
@@ -67,11 +82,11 @@ function Upload(): JSX.Element {
     e.preventDefault()
 
     if (searchHash === '') {
-      setFilesToView(listOfFiles)
+      setFilesToView(uploadedFiles)
     } else {
       let searchList: fileType[] = []
-      listOfFiles.forEach((file: fileType) => {
-        if (file.name.includes(searchHash)) {
+      uploadedFiles.forEach((file: fileType) => {
+        if (file.fileName.includes(searchHash)) {
           searchList.push(file)
         }
         if (file.cid.toString().includes(searchHash)) {
@@ -102,9 +117,9 @@ function Upload(): JSX.Element {
         let newFile: fileType = {
           // cid: generateRandom10DigitNumber(),
           cid: generateRandom10DigitNumber(),
-          name: file.name,
-          size: file.size / 1e6,
-          cost: 0,
+          fileName: file.name,
+          fileSize: file.size / 1e6,
+          fileCost: 0,
           selectStatus: true
         }
         filesToAppend.push(newFile)
@@ -122,14 +137,14 @@ function Upload(): JSX.Element {
   }
 
   const handleRemoveFile = (index: number, file: fileType) => {
-    let confirmed = window.confirm(`Are you sure you want to delete: ${file.name}?`)
+    let confirmed = window.confirm(`Are you sure you want to delete: ${file.fileName}?`)
     if (confirmed) {
-      let newByteSize = numBytes - file.size
+      let newByteSize = numBytes - file.fileSize
       setNumBytes(() => (newByteSize === 0 ? 0 : newByteSize))
       setNumFiles((prevFiles: number) => prevFiles - 1)
-      let newFileList = listOfFiles
+      let newFileList = uploadedFiles
       newFileList.splice(index, 1)
-      setListOfFiles(() => newFileList)
+      setUploadedFiles(() => newFileList)
       setFilesToView(() => newFileList)
     }
   }
@@ -162,7 +177,7 @@ function Upload(): JSX.Element {
     // setFileCost(0)
     setNumBytes(() => byteCount)
     setNumFiles(() => fileCount)
-    setListOfFiles((prevList: fileType[]) => prevList.concat(fileQueue))
+    setUploadedFiles((prevList: fileType[]) => prevList.concat(fileQueue))
     setFilesToView((prevList: fileType[]) => prevList.concat(fileQueue))
     setFileCost(0)
     setShowCostModal(false)
@@ -176,7 +191,7 @@ function Upload(): JSX.Element {
 
   const handleCostCancelOne = () => {
     setFileCount((prevCount) => prevCount - 1)
-    let currFileSize = fileQueue[fileQueueIndex].size
+    let currFileSize = fileQueue[fileQueueIndex].fileSize
     setByteCount((prevCount) => prevCount - currFileSize)
     let queue = fileQueue
     queue.splice(fileQueueIndex, 1)
@@ -272,22 +287,22 @@ function Upload(): JSX.Element {
             <input type="checkbox" className="mr-10" />
             <div className="flex flex-1 items-center">
               <div className="flex flex-col items-center justify-center h-full mr-5">
-                {getFileIcon(file.name)}
+                {getFileIcon(file.fileName)}
               </div>
               <div className="ml-2">
-                <span className="block font-semibold">{file.name}</span>
+                <span className="block font-semibold">{file.fileName}</span>
                 <span className="block text-gray-500">{file.cid}</span>{' '}
               </div>
             </div>
             <span className="flex-1 text-left">
-              {file.size.toLocaleString(undefined, {
+              {file.fileSize.toLocaleString(undefined, {
                 minimumFractionDigits: 0,
                 maximumFractionDigits: 6
               })}{' '}
               MB
             </span>
             <span className="flex-1 text-left flex justify-between items-center">
-              <span>{file.cost} SWE</span>
+              <span>{file.fileCost} SWE</span>
               <button
                 onClick={() => handleRemoveFile(index, file)}
                 className="text-red-500 hover:text-red-700"
@@ -387,15 +402,17 @@ function Upload(): JSX.Element {
                         </td>
                         <td className="px-4 py-2 relative group">
                           {/* Truncate file name */}
-                          {file.name.length > 20 ? `${file.name.slice(0, 20)}...` : file.name}
+                          {file.fileName.length > 20
+                            ? `${file.fileName.slice(0, 20)}...`
+                            : file.fileName}
 
                           {/* Tooltip */}
                           <div className="absolute bottom-3 left-2 transform translate-y-full bg-gray-700 text-white text-sm rounded-lg p-2 opacity-0 group-hover:opacity-100 transition-opacity duration-100 delay-50 pointer-events-none">
-                            {file.name}
+                            {file.fileName}
                           </div>
                         </td>
                         <td className="px-4 py-2">
-                          {file.size.toLocaleString(undefined, {
+                          {file.fileSize.toLocaleString(undefined, {
                             minimumFractionDigits: 0,
                             maximumFractionDigits: 6
                           })}
@@ -403,7 +420,7 @@ function Upload(): JSX.Element {
                         <td className="px-4 py-2">
                           <input
                             type="number"
-                            value={file.cost}
+                            value={file.fileCost}
                             onChange={(e) => {
                               const updatedCost = parseFloat(e.target.value) || 0
                               setfileQueue((prevQueue) =>

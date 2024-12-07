@@ -30,8 +30,8 @@ function Register(): JSX.Element {
       const registerRequest = {
         jsonrpc: '2.0',
         id: 1,
-        method: 'p2p_Register',
-        params: [username, password, seed],
+        method: 'p2p_register',
+        params: [username, password, seed]
       }
 
       const response = await fetch('http://localhost:8081/rpc', {
