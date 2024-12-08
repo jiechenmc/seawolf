@@ -1,4 +1,4 @@
-BUILD_DIR=$(PWD)/bin
+BUILD_DIR="$(PWD)"/bin
 
 all: build
 
@@ -6,7 +6,7 @@ bin:
 	mkdir -p $(BUILD_DIR)
 
 build: bin
-	go build -C $(BUILD_DIR) $(PWD)/cmd/p2p/main.go && \
+	go build -C $(BUILD_DIR) "$(PWD)"/cmd/p2p/main.go && \
 	cp $(BUILD_DIR)/main seawolf_p2p
 
 run: build
