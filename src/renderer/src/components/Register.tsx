@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Logo from '../assets/logo.png'
 import React from 'react'
+import LoadingModal from './LoadingModal'
 import { registerUser } from '../rpcUtils'
 
 function Register(): JSX.Element {
@@ -12,6 +13,8 @@ function Register(): JSX.Element {
 
   const [seed, setSeed] = useState<string>('')
 
+  const [loading, setLoading] = useState<boolean>(false)
+
   const navigate = useNavigate()
 
   const handleGoBackLogin = (e: React.FormEvent) => {
@@ -21,6 +24,7 @@ function Register(): JSX.Element {
 
   const handleRegisterAccount = async (e: React.FormEvent) => {
     e.preventDefault()
+    setLoading(true)
 
     if (password !== confirmPassword) {
       setPasswordsMatch(false)
@@ -29,12 +33,15 @@ function Register(): JSX.Element {
     }
     try {
       const data = await registerUser(username, password, seed)
+      console.log(data)
       if (data === 'success') {
         console.log('User registered successfully')
+        setLoading(false)
         navigate('/')
       }
     } catch (error) {
-      console.log('Received this error when registering user: ', error)
+      console.log(error)
+      setLoading(false)
     }
   }
 
@@ -108,6 +115,7 @@ function Register(): JSX.Element {
           </div>
         </form>
       </div>
+      <LoadingModal isVisible={loading} />
     </div>
   )
 }

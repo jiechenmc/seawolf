@@ -5,14 +5,26 @@ import { IoCloudUploadSharp } from 'react-icons/io5'
 import { IoIosCloudDownload } from 'react-icons/io'
 import { GiTwoCoins } from 'react-icons/gi'
 import { useNavigate } from 'react-router-dom'
+import { logoutUser } from '@renderer/rpcUtils'
 
 function SideNav(): JSX.Element {
   const navigate = useNavigate()
 
-  const handleClickTab = (e: React.FormEvent, tab: string) => {
+  const handleClickTab = async (e: React.FormEvent, tab: string) => {
     e.preventDefault()
 
-    navigate(tab)
+    if (tab === '/') {
+      try {
+        const data = await logoutUser()
+        if (data) {
+          navigate(tab)
+        }
+      } catch (error) {
+        console.log(error)
+      }
+    } else {
+      navigate(tab)
+    }
   }
 
   return (

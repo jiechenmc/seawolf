@@ -23,16 +23,28 @@ function NavBar(): JSX.Element {
 
   const subButtons = [
     { icon: FaHome, position: 'top-0 left-1/2 -translate-x-1/2 -translate-y-full', tab: '/home' },
-    { icon: FaExchangeAlt, position: 'top-1/2 right-0 -translate-y-1/2 translate-x-full', tab: '/exchange' },
-    { icon: GiTwoCoins, position: 'bottom-0 left-1/2 -translate-x-1/2 translate-y-full', tab: '/mining' },
-    { icon: FaWallet, position: 'top-1/2 left-0 -translate-y-1/2 -translate-x-full', tab: '/wallet' },
-    { icon: FaCog, position: 'top-0 left-0 -translate-x-full -translate-y-full', tab: '/settings' },
+    {
+      icon: FaExchangeAlt,
+      position: 'top-1/2 right-0 -translate-y-1/2 translate-x-full',
+      tab: '/exchange'
+    },
+    {
+      icon: GiTwoCoins,
+      position: 'bottom-0 left-1/2 -translate-x-1/2 translate-y-full',
+      tab: '/mining'
+    },
+    {
+      icon: FaWallet,
+      position: 'top-1/2 left-0 -translate-y-1/2 -translate-x-full',
+      tab: '/wallet'
+    },
+    { icon: FaCog, position: 'top-0 left-0 -translate-x-full -translate-y-full', tab: '/settings' }
   ]
 
   return (
-    <Draggable defaultPosition={{x: 0, y: 500}}>
+    <Draggable defaultPosition={{ x: 0, y: 500 }}>
       <div className="fixed">
-        <button 
+        <button
           className="relative z-10 bg-black hover:bg-gray-100 p-2 rounded-full shadow-lg cursor-move"
           onClick={handleMainClick}
         >

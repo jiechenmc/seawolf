@@ -23,7 +23,7 @@ export async function registerUser(
 
   const data = await response.json()
 
-  if (data.result !== 'sucess') {
+  if (data.result !== 'success') {
     throw new Error('Error registering new user: ', data.error)
   }
 
@@ -48,8 +48,33 @@ export async function loginUser(username: string, password: string, id: number =
 
   const data = await response.json()
 
-  if (data.result !== 'sucess') {
+  if (data.error) {
     throw new Error('Error logging in user: ', data.error)
+  }
+
+  return data.result
+}
+
+export async function logoutUser(id: number = 1): Promise<any> {
+  const request = {
+    jsonrpc: '2.0',
+    id: id,
+    method: 'p2p_logout',
+    params: []
+  }
+
+  const response = await fetch(`http://localhost:${PORT}/rpc`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(request)
+  })
+
+  const data = await response.json()
+
+  if (data.error) {
+    throw new Error('Error logging out user: ', data.error)
   }
 
   return data.result
