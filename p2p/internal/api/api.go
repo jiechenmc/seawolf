@@ -12,12 +12,10 @@ type API struct {
 
 func enableCORS(next http.Handler) http.Handler {
     return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        // Set CORS headers
-        w.Header().Set("Access-Control-Allow-Origin", "*") // Allow all origins or set specific origin
-        w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS") // Allow methods
-        w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization") // Allow headers
+        w.Header().Set("Access-Control-Allow-Origin", "*")
+        w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
-        // Handle preflight requests (OPTIONS request)
         if r.Method == "OPTIONS" {
             return
         }
@@ -37,7 +35,6 @@ func APIServer() *API {
 }
 
 func (a *API) Start(listenAddr string) {
-    // http.HandleFunc("/rpc", a.rpcServer.ServeHTTP)
     http.Handle("/rpc", enableCORS(http.HandlerFunc(a.rpcServer.ServeHTTP)))
     err := http.ListenAndServe(listenAddr, nil)
     if err != nil {
