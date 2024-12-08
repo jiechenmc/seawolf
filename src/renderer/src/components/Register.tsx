@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Logo from '../assets/logo.png'
 import React from 'react'
+import { registerUser } from '../rpcUtils'
 
 function Register(): JSX.Element {
   const [username, setUsername] = useState<string>('')
@@ -20,40 +21,20 @@ function Register(): JSX.Element {
 
   const handleRegisterAccount = async (e: React.FormEvent) => {
     e.preventDefault()
-    console.log('Cliked on button to register new user')
 
     if (password !== confirmPassword) {
       setPasswordsMatch(false)
     } else {
       setPasswordsMatch(true)
-
-      const registerRequest = {
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'p2p_register',
-        params: [username, password, seed]
+    }
+    try {
+      const data = await registerUser(username, password, seed)
+      if (data === 'success') {
+        console.log('User registered successfully')
+        navigate('/')
       }
-
-      const response = await fetch('http://localhost:8081/rpc', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(registerRequest)
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        if (data.result === 'success') {
-          console.log('Restering new user returned "sucess"')
-        } else {
-          console.log('Restering new user did not return "success"')
-        }
-      } else {
-        console.error('Error calling p2p.Register')
-      }
-
-      navigate('/')
+    } catch (error) {
+      console.log('Received this error when registering user: ', error)
     }
   }
 
@@ -68,8 +49,8 @@ function Register(): JSX.Element {
           Register for a new account
         </div>
         <form>
-          {/* <label className="block text-lg font-semibold text-gray-700 mb-1">
-            Create New Wallet Address
+          <label className="block text-lg font-semibold text-gray-700 mb-1">
+            Create a username
           </label>
           <input
             type="text"
@@ -77,9 +58,9 @@ function Register(): JSX.Element {
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-md"
-          /> */}
+          />
           <label className="mt-6 block text-lg font-semibold text-gray-700 mb-1">
-            Choose Password
+            Choose a password
           </label>
           <input
             type="password"
@@ -89,7 +70,7 @@ function Register(): JSX.Element {
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-md"
           />
           <label className="mt-6 block text-lg font-semibold text-gray-700 mb-1">
-            Confirm Password
+            Confirm password
           </label>
           <input
             type="password"
@@ -99,8 +80,8 @@ function Register(): JSX.Element {
             className={`w-full px-4 py-2 border rounded-lg shadow-md ${!passwordsMatch ? 'border-red-500' : 'border-gray-300'} focus:outline-none focus:ring-2 focus:ring-blue-500`}
           />
           {!passwordsMatch && <p className="text-red-500 text-sm mt-2">Passwords do not match</p>}
-          {/* <label className="mt-6 block text-lg font-semibold text-gray-700 mb-1">
-            Choose a seed (default is random)
+          <label className="mt-6 block text-lg font-semibold text-gray-700 mb-1">
+            Create a seed (default is random)
           </label>
           <input
             type="text"
@@ -108,7 +89,7 @@ function Register(): JSX.Element {
             value={seed}
             onChange={(e) => setSeed(e.target.value)}
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-md"
-          /> */}
+          />
           <div className="flex justify-center mt-10">
             <button
               type="button"
