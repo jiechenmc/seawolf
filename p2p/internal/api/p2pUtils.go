@@ -176,7 +176,9 @@ func p2pConnectToPeer(ctx context.Context, node host.Host, peerAddr string) erro
         return internalError
     }
 
-    err = node.Connect(ctx, *info)
+    timeoutCtx, cancel := context.WithTimeout(ctx, p2pConnectionTimeout)
+    err = node.Connect(timeoutCtx, *info)
+    cancel()
     if err != nil {
         log.Printf("Failed to connect to peer: %s", err)
         return peerConnectionError

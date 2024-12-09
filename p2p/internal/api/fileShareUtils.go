@@ -31,6 +31,9 @@ const fileShareWantTimeout = time.Second * 10
 const fileShareFindProvidersTimeout = time.Second * 1
 const fileShareOpenStreamTimeout = time.Second * 1
 const fileShareIdleTimeout = time.Second * 60
+const fileShareDirectory = "fileshare"
+const fileShareUploadsDirectory = "fileshare/uploads"
+const fileShareDownloadsDirectory = "fileshare/downloads"
 
 var nextSessionIDLock sync.Mutex
 var nextSessionID = 0
@@ -1128,7 +1131,8 @@ func (f *FileShareNode) PutFile(ctx context.Context, inputFile string, price flo
     }
 
     //Create metadata node
-    fileMeta := &FileShareFileMeta{ Size: uint64(bytesRead), Price: price, Name: filepath.Base(inputFile) }
+    filename := filepath.Base(inputFile)
+    fileMeta := &FileShareFileMeta{ Size: uint64(bytesRead), Price: price, Name: filename }
     metaBytes, err := fileMeta.Marshal()
     if err != nil {
         log.Printf("Failed to marshal file metadata. %v \n", err)
@@ -1155,6 +1159,26 @@ func (f *FileShareNode) PutFile(ctx context.Context, inputFile string, price flo
     err = f.kadDHT.Provide(ctx, metaNode.Cid(), true)
     if err != nil {
         log.Printf("Failed to provide cid. %v\n", err)
+        return metaNode.Cid(), nil
+    }
+    // Record file into database
+    err = dbAddFile(nil, f.host.ID().String(), node.Cid().String(), filename, price)
+    if err != nil {
+        log.Printf("Failed to record file into database. %v\n", err)
+        return metaNode.Cid(), nil
+    }
+
+    // Copy file to files directory
+    err = os.MkdirAll(fileShareUploadsDirectory, 0750)
+    if err != nil && !os.IsExist(err) {
+        log.Printf("Failed to create uploads directory. %v\n", err)
+        return metaNode.Cid(), nil
+    }
+    // TODO if link fails, fall back to copying the file
+    os.Remove(fileShareUploadsDirectory + "/" + filename);
+    err = os.Link(inputFile, fileShareUploadsDirectory + "/" + filename)
+    if err != nil {
+        log.Printf("Failed to link uploaded file. %v\n", err)
         return metaNode.Cid(), nil
     }
 

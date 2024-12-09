@@ -274,7 +274,6 @@ func (s *P2PService) PutFile(inputFile string, price float64) (string, error) {
         log.Printf("Attempted to put file when not logged in\n")
         return "", notLoggedIn
     }
-    // cid, err := bitswapPutFile(context.Background(), s.exchange, s.bstore, inputFile)
     cid, err := s.fsNode.PutFile(context.Background(), inputFile, price)
     if err != nil {
         return "", err
