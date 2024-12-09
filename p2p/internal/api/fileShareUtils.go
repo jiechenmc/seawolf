@@ -973,15 +973,21 @@ func (f *FileShareNode) GetFile(ctx context.Context, providerIDStr string, rootC
 
     var bytes []byte
     var dataChannel chan []byte
-
+    var ok bool
     reqCid := rootCid
-    fileMeta := &FileShareFileMeta{}
+    fileMeta := FileShareFileMeta{}
     //Check local blockstore before asking peers
     has, err := f.bstore.Has(ctx, reqCid)
     if err != nil {
         return -1, internalError
     }
     if has {
+        f.mstoreLock.Lock()
+        fileMeta, ok = f.mstore[reqCid]
+        f.mstoreLock.Unlock()
+        if !ok {
+            return -1, internalError
+        }
         block, err := f.bstore.Get(ctx, reqCid)
         if err != nil {
             return -1, internalError
@@ -990,6 +996,16 @@ func (f *FileShareNode) GetFile(ctx context.Context, providerIDStr string, rootC
         dataChannel <- bytes
         close(dataChannel)
     } else {
+        bytes = session.SendWantMeta(providerID, reqCid)
+        if bytes == nil {
+            log.Printf("Failed to get file metadata.\n")
+            return -1, internalError
+        }
+        err = fileMeta.Unmarshal(bytes)
+        if err != nil {
+            log.Printf("Failed to unmarshal file metadata.\n")
+            return -1, internalError
+        }
         dataChannel = session.SendWantData(providerID, reqCid)
         if dataChannel == nil {
             log.Printf("Failed to get file.\n")
