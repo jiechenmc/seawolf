@@ -10,7 +10,6 @@ import (
     "sync"
     "strconv"
     "strings"
-    "sort"
     "encoding/binary"
     "path/filepath"
     "github.com/libp2p/go-libp2p/core/host"
@@ -45,11 +44,10 @@ type FileShareNode struct {
     host host.Host
     kadDHT *dht.IpfsDHT
     bstore blockstore.Blockstore
-    fstore map[cid.Cid]cid.Cid
+    mstore map[cid.Cid]FileShareFileMeta
     sessionStore map[int]*FileShareSession
     rSessionStore map[peer.ID]map[int]*FileShareRemoteSession
     mstoreLock sync.Mutex
-    fstoreLock sync.Mutex
     sessionStoreLock sync.Mutex
     rSessionStoreLock sync.Mutex
 }
@@ -93,7 +91,6 @@ type FileShareFileDiscoveryInfo struct {
 type FileShareProvider struct {
     PeerID peer.ID          `json:"peer_id"`
     Price float64           `json:"price"`
-    MetadataCid string      `json:"metadata_cid"`
     Name string             `json:"file_name"`
 }
 
@@ -193,10 +190,10 @@ func FileShareNodeCreate(node host.Host, kadDHT *dht.IpfsDHT) *FileShareNode {
         host: node,
         kadDHT: kadDHT,
         bstore: blkStore,
-        fstore: make(map[cid.Cid]cid.Cid),
+        mstore: make(map[cid.Cid]FileShareFileMeta),
         sessionStore: make(map[int]*FileShareSession),
         rSessionStore: make(map[peer.ID]map[int]*FileShareRemoteSession),
-        fstoreLock: sync.Mutex{},
+        mstoreLock: sync.Mutex{},
         sessionStoreLock: sync.Mutex{},
         rSessionStoreLock: sync.Mutex{},
     }
@@ -309,27 +306,17 @@ func (f *FileShareNode) handleWantMeta(ctx context.Context, stream *P2PStream) e
         return err
     }
 
-    //Check whether cid is data or metadata
-    f.fstoreLock.Lock()
-    metaCid, ok := f.fstore[cid]
-    f.fstoreLock.Unlock()
+    //Look for metadata in meta data store
+    f.mstoreLock.Lock()
+    fileMetadata, ok := f.mstore[cid]
+    f.mstoreLock.Unlock()
     //This is request for metadata given data cid
     if ok {
-        cid = metaCid
-    }
-
-    has, err := f.bstore.Has(ctx, cid)
-    if err == nil && has {
-        block, err := f.bstore.Get(ctx, cid)
+        rawData, err := fileMetadata.Marshal()
         if err != nil {
-            goto Failed
+            log.Printf("Failed to marshal file metadata. %v \n", err)
+            return err
         }
-        node, err := dag.DecodeProtobufBlock(block)
-        if err != nil {
-            goto Failed
-        }
-        rawData := node.RawData()
-
         err = stream.SendString(fmt.Sprintf("HERE\n%d\n", len(rawData)))
         if err != nil {
             return err
@@ -338,16 +325,8 @@ func (f *FileShareNode) handleWantMeta(ctx context.Context, stream *P2PStream) e
         if err != nil {
             return err
         }
-    } else {
-        if err != nil {
-            return err
-        } else {
-            goto Failed
-        }
+        return nil
     }
-
-    return nil
-Failed:
     stream.SendString("DON'T HAVE\n")
     return nil
 }
@@ -506,15 +485,15 @@ func (f *FileShareNode) handleDiscover(stream *P2PStream) error {
 
     knownCids := make([]cid.Cid, 0, maxCount)
     i := 0
-    f.fstoreLock.Lock()
-    for dataCid, _ := range f.fstore {
+    f.mstoreLock.Lock()
+    for dataCid, _ := range f.mstore {
         knownCids = append(knownCids, dataCid)
         i ++
         if i == maxCount {
             break
         }
     }
-    f.fstoreLock.Unlock()
+    f.mstoreLock.Unlock()
     //Create KNOW response
     var builder strings.Builder
     builder.WriteString(fmt.Sprintf("KNOW\n%d\n", len(knownCids)))
@@ -995,110 +974,51 @@ func (f *FileShareNode) GetFile(ctx context.Context, providerIDStr string, rootC
     var bytes []byte
     var dataChannel chan []byte
 
-    isMeta := true
-    metaCid := rootCid
     reqCid := rootCid
     fileMeta := &FileShareFileMeta{}
-    for {
-        //Check local blockstore before asking peers
-        has, err := f.bstore.Has(ctx, reqCid)
+    //Check local blockstore before asking peers
+    has, err := f.bstore.Has(ctx, reqCid)
+    if err != nil {
+        return -1, internalError
+    }
+    if has {
+        block, err := f.bstore.Get(ctx, reqCid)
         if err != nil {
             return -1, internalError
         }
-        if has {
-            block, err := f.bstore.Get(ctx, reqCid)
-            if err != nil {
-                return -1, internalError
-            }
-            bytes = block.RawData()
-            if !isMeta {
-                dataChannel <- bytes
-                close(dataChannel)
-            }
-        } else {
-            if isMeta { 
-                bytes = session.SendWantMeta(providerID, reqCid)
-                if bytes == nil {
-                    log.Printf("Failed to get file metadata.\n")
-                    return -1, internalError
-                }
-            } else {
-                dataChannel = session.SendWantData(providerID, reqCid)
-                if dataChannel == nil {
-                    log.Printf("Failed to get file.\n")
-                    return -1, internalError
-                }
-            }
-        }
-
-        if isMeta {
-            metaNode, err := dag.DecodeProtobuf(bytes)
-            if err != nil {
-                log.Printf("Failed to parse bytes from provider.\n")
-                return -1, internalError
-            }
-            //Get metadata and price
-            err = fileMeta.Unmarshal(metaNode.Data())
-            if err != nil {
-                log.Printf("Failed to unmarshal file metadata.\n")
-                return -1, internalError
-            }
-
-            log.Printf("Downloading file %v, size: %v bytes, price: %v\n", fileMeta.Name, fileMeta.Size, fileMeta.Price)
-
-            isMeta = false
-            links := metaNode.Links()
-            if len(links) == 1 {
-                //Ensure that original requested cid is the meta cid itself or the data cid
-                if metaNode.Cid() != reqCid {
-                    if links[0].Cid != reqCid {
-                        log.Printf("Data from provider corrupted.\n")
-                        return -1, internalError
-                    }
-                }
-                reqCid = links[0].Cid
-                //Update session cid to data cid
-                session.ReqCid = reqCid.String()
-                metaCid = metaNode.Cid()
-            } else {
-                log.Printf("Unexpected links from metadata node.\n")
-                return -1, internalError
-            }
-
-        } else {
-            deferCleanup = false
-            go func() {
-                bytesWritten := uint64(0)
-                for data := range dataChannel {
-                    file.Write(data)
-                    bytesWritten += uint64(len(data))
-                }
-                file.Close()
-                if bytesWritten != fileMeta.Size {
-                    f.SessionCleanup(session, 1)
-                    log.Printf("Wrong number of bytes received\n")
-                    return
-                }
-                err = os.Rename(outputFile + ".tmp", outputFile)
-                if err != nil {
-                    f.SessionCleanup(session, 1)
-                    log.Printf("Failed to move temporary file to output file. %v\n")
-                    return
-                }
-                f.SessionCleanup(session, 0)
-
-
-                //Add data cid to fstore
-                f.fstoreLock.Lock()
-                _, ok := f.fstore[reqCid]
-                if !ok {
-                    f.fstore[reqCid] = metaCid
-                }
-                f.fstoreLock.Unlock()
-            }()
-            break
+        bytes = block.RawData()
+        dataChannel <- bytes
+        close(dataChannel)
+    } else {
+        dataChannel = session.SendWantData(providerID, reqCid)
+        if dataChannel == nil {
+            log.Printf("Failed to get file.\n")
+            return -1, internalError
         }
     }
+
+    deferCleanup = false
+    go func() {
+        bytesWritten := uint64(0)
+        for data := range dataChannel {
+            file.Write(data)
+            bytesWritten += uint64(len(data))
+        }
+        file.Close()
+        if bytesWritten != fileMeta.Size {
+            f.SessionCleanup(session, 1)
+            log.Printf("Wrong number of bytes received\n")
+            return
+        }
+        //TODO compute hash to verify integrity of file
+        err = os.Rename(outputFile + ".tmp", outputFile)
+        if err != nil {
+            f.SessionCleanup(session, 1)
+            log.Printf("Failed to move temporary file to output file. %v\n")
+            return
+        }
+        f.SessionCleanup(session, 0)
+    }()
     return session.SessionID, nil
 }
 
@@ -1132,57 +1052,44 @@ func (f *FileShareNode) PutFile(ctx context.Context, inputFile string, price flo
 
     //Create metadata node
     filename := filepath.Base(inputFile)
-    fileMeta := &FileShareFileMeta{ Size: uint64(bytesRead), Price: price, Name: filename }
-    metaBytes, err := fileMeta.Marshal()
-    if err != nil {
-        log.Printf("Failed to marshal file metadata. %v \n", err)
-        return cid.Cid{}, nil
-    }
-    metaNode := dag.NodeWithData(metaBytes)
+    fileMeta := FileShareFileMeta{ Size: uint64(bytesRead), Price: price, Name: filename }
 
     //Create data node and link it with root node
     node := dag.NodeWithData(buffer).Copy()
-    metaNode.AddNodeLink("data", node)
 
     f.bstore.Put(ctx, node)
-    f.bstore.Put(ctx, metaNode.Copy())
 
-    f.fstoreLock.Lock()
-    f.fstore[node.Cid()] = metaNode.Cid()
-    f.fstoreLock.Unlock()
+    f.mstoreLock.Lock()
+    f.mstore[node.Cid()] = fileMeta
+    f.mstoreLock.Unlock()
 
     err = f.kadDHT.Provide(ctx, node.Cid(), true)
     if err != nil {
         log.Printf("Failed to provide cid. %v\n", err)
-        return metaNode.Cid(), nil
-    }
-    err = f.kadDHT.Provide(ctx, metaNode.Cid(), true)
-    if err != nil {
-        log.Printf("Failed to provide cid. %v\n", err)
-        return metaNode.Cid(), nil
+        return cid.Cid{}, internalError
     }
     // Record file into database
     err = dbAddFile(nil, f.host.ID().String(), node.Cid().String(), filename, price)
     if err != nil {
         log.Printf("Failed to record file into database. %v\n", err)
-        return metaNode.Cid(), nil
+        return cid.Cid{}, internalError
     }
 
     // Copy file to files directory
     err = os.MkdirAll(fileShareUploadsDirectory, 0750)
     if err != nil && !os.IsExist(err) {
         log.Printf("Failed to create uploads directory. %v\n", err)
-        return metaNode.Cid(), nil
+        return cid.Cid{}, internalError
     }
     // TODO if link fails, fall back to copying the file
     os.Remove(fileShareUploadsDirectory + "/" + filename);
     err = os.Link(inputFile, fileShareUploadsDirectory + "/" + filename)
     if err != nil {
         log.Printf("Failed to link uploaded file. %v\n", err)
-        return metaNode.Cid(), nil
+        return cid.Cid{}, internalError
     }
 
-    return metaNode.Cid(), nil
+    return node.Cid(), nil
 }
 
 func (f *FileShareNode) Discover(ctx context.Context) []FileShareFileDiscoveryInfo {
@@ -1197,13 +1104,13 @@ func (f *FileShareNode) Discover(ctx context.Context) []FileShareFileDiscoveryIn
     wg := sync.WaitGroup{}
     wg.Add(len(peerIDs))
 
-    //Dump own fstore into set of data cids
+    //Dump own mstore into set of data cids
     mapLock.Lock()
-    f.fstoreLock.Lock()
-    for dataCid, _ := range f.fstore {
+    f.mstoreLock.Lock()
+    for dataCid, _ := range f.mstore {
         fileDiscoveryMap[dataCid] = nil
     }
-    f.fstoreLock.Unlock()
+    f.mstoreLock.Unlock()
     mapLock.Unlock()
 
     //Iterate through node's known peers and send discover requests
@@ -1257,41 +1164,8 @@ func (f *FileShareNode) GetFileDiscoveryInfo(ctx context.Context, reqCidStr stri
     session := f.SessionCreate(ctx, "")
     defer f.SessionCleanup(session, 0)
 
-    dataCid, err := session.GetDataCid(ctx, reqCid)
-    if err != nil {
-        return nil, err
-    }
-    fileDiscovery := session.DiscoverFile(ctx, dataCid, 1000)
-    //Metadata cid was requested, providers with this metadata cid should come first
-    if fileDiscovery != nil && dataCid != reqCid {
-        sort.Slice(fileDiscovery.Providers, func(i, j int) bool {
-            //Check if Providers[i] has the requested metadata cid
-            if fileDiscovery.Providers[i].MetadataCid == reqCid.String() {
-                //Providers[i] goes first if Providers[j] doesn't have the requested metadata cid
-                return fileDiscovery.Providers[j].MetadataCid != reqCid.String()
-            } else {
-                return false
-            }
-        })
-    }
+    fileDiscovery := session.DiscoverFile(ctx, reqCid, 1000)
     return fileDiscovery, nil
-}
-
-func (s *FileShareSession) GetDataCid(ctx context.Context, reqCid cid.Cid) (cid.Cid, error) {
-    //Probe by getting one provider for cid
-    fileShareDiscovery := s.DiscoverFile(ctx, reqCid, 1)
-    if fileShareDiscovery == nil {
-        return cid.Cid{}, contentNotFound
-    }
-    //If reqCid is meta cid, use data cid
-    if reqCid.String() != fileShareDiscovery.DataCid {
-        dataCid, err := cid.Decode(fileShareDiscovery.DataCid)
-        if err != nil {
-            return cid.Cid{}, invalidParams
-        }
-        return dataCid, nil
-    }
-    return reqCid, nil
 }
 
 func (s *FileShareSession) DiscoverFile(ctx context.Context, reqCid cid.Cid, providers int) *FileShareFileDiscoveryInfo {
@@ -1318,70 +1192,47 @@ func (s *FileShareSession) DiscoverFile(ctx context.Context, reqCid cid.Cid, pro
             if len(fileDiscovery.Providers) == providers {
                 return
             }
-            var metaNode *dag.ProtoNode
-            var err error
-            var ok, has bool
+            fileMeta := FileShareFileMeta{}
+            var ok bool
+            //Get metadata
             if provider.ID == s.node.host.ID() {
-                //Check if it is meta cid or data cid
-                s.node.fstoreLock.Lock()
-                metaCid, ok := s.node.fstore[reqCid]
-                s.node.fstoreLock.Unlock()
-                //Is meta cid
+                s.node.mstoreLock.Lock()
+                fileMeta, ok = s.node.mstore[reqCid]
+                s.node.mstoreLock.Unlock()
                 if !ok {
-                    metaCid = reqCid
-                }
-                //Ensure meta cid is in block store if we're a registered provider(in case we've rebooted)
-                has, err = s.node.bstore.Has(ctx, metaCid)
-                if err != nil || !has {
                     return
-                } else {
-                    metaBlock, err := s.node.bstore.Get(ctx, metaCid)
-                    if err != nil {
-                        return
-                    }
-                    metaNode, err = dag.DecodeProtobuf(metaBlock.RawData())
-                    if err != nil {
-                        return
-                    }
                 }
             } else {
                 bytes := s.SendWantMeta(provider.ID, reqCid)
                 if bytes == nil {
                     return
                 }
-                metaNode, err = dag.DecodeProtobuf(bytes)
+                err = fileMeta.Unmarshal(bytes)
+                if err != nil {
+                    log.Printf("Error unmarshalling file metadata\n")
+                    return
+                }
             }
-            links := metaNode.Links()
-            //Get metadata and price
-            fileMeta := FileShareFileMeta{}
-            err = fileMeta.Unmarshal(metaNode.Data())
-            //Number of links expected to be 1 and request cid should either be the meta cid or data cid
-            if err != nil || len(links) != 1 || !(metaNode.Cid() == reqCid || links[0].Cid == reqCid) {
-                //Ignore this provider
-                return
-            }
-            dataCid := links[0].Cid
 
             provider := FileShareProvider{
                 PeerID: provider.ID,
                 Price: fileMeta.Price,
                 Name: fileMeta.Name,
-                MetadataCid: metaNode.Cid().String(),
             }
 
             lock.Lock()
-            fileDiscovery.DataCid = dataCid.String()
+            fileDiscovery.DataCid = reqCid.String()
             fileDiscovery.Size = fileMeta.Size
             fileDiscovery.Providers = append(fileDiscovery.Providers, provider)
             lock.Unlock()
 
-            //Add to fstore
-            s.node.fstoreLock.Lock()
-            _, ok = s.node.fstore[dataCid]
+            //Add to metadata store
+            s.node.mstoreLock.Lock()
+            _, ok = s.node.mstore[reqCid]
             if !ok {
-                s.node.fstore[dataCid] = metaNode.Cid()
+                s.node.mstore[reqCid] = fileMeta
             }
-            s.node.fstoreLock.Unlock()
+            s.node.mstoreLock.Unlock()
         }(i)
     }
     wg.Wait()
