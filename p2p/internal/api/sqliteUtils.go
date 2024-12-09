@@ -17,7 +17,7 @@ const createWalletTableQuery = `CREATE TABLE IF NOT EXISTS wallets
                                      rpc_password_ciphertext TEXT, rpc_password_salt TEXT)`
 
 const createFileTableQuery = `CREATE TABLE IF NOT EXISTS files
-                              (id INTEGER PRIMARY KEY, peer_id TEXT UNIQUE, cid TEXT, filename TEXT, price FLOAT)`
+                              (id INTEGER PRIMARY KEY, peer_id TEXT , cid TEXT, filename TEXT, price FLOAT)`
 
 
 func dbOpen() (*sql.DB, error) {
