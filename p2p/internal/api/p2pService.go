@@ -7,10 +7,8 @@ import (
     "context"
     "github.com/libp2p/go-libp2p/core/host"
     "github.com/libp2p/go-libp2p/core/peer"
-    "github.com/ipfs/boxo/bitswap"
     "github.com/libp2p/go-libp2p/core/routing"
     dht "github.com/libp2p/go-libp2p-kad-dht"
-    blockstore "github.com/ipfs/boxo/blockstore"
 
 	// "path/filepath"
 	// "github.com/btcsuite/btcd/btcutil"
@@ -19,15 +17,10 @@ import (
 
 type P2PService struct {
     username *string
-    rpcUsername *string
-    rpcPassword *string
     p2pHost *host.Host
     kadDHT *dht.IpfsDHT
     fsNode *FileShareNode
     chatNode *ChatNode
-    exchange *bitswap.Bitswap
-    bstore *blockstore.Blockstore
-    messages chan string
 }
 
 func (s *P2PService) ConnectToPeer(peerID string) (string, error) {
@@ -177,14 +170,10 @@ func (s *P2PService) Login( username string, password string) (string, error) {
     }
     log.Printf("Successfully created DHT instance\n")
 
-    //Create bitswap instance
-    s.exchange, s.bstore = bitswapCreate(ctx, *s.p2pHost, s.kadDHT)
-
     s.username = &username
     log.Printf("Successfully logged in user '%v'\n", *s.username)
 
-    s.messages = make(chan string, 128)
-    p2pSetupStreamHandlers(*s.p2pHost, s.kadDHT, s.messages)
+    p2pSetupStreamHandlers(*s.p2pHost, s.kadDHT);
 
     s.fsNode = FileShareNodeCreate(*s.p2pHost, s.kadDHT)
     s.chatNode = ChatNodeCreate(*s.p2pHost, s.kadDHT, s.fsNode)
@@ -199,6 +188,7 @@ func (s *P2PService) Logout() (string, error) {
     s.username = nil;
     s.fsNode = nil;
     s.p2pHost = nil;
+    s.chatNode = nil;
     return "success", nil
 }
 
@@ -289,6 +279,7 @@ func (s *P2PService) PutFile(inputFile string, price float64) (string, error) {
     if err != nil {
         return "", err
     }
+
     return cid.String(), nil
 }
 

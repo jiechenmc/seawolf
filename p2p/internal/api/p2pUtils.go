@@ -307,23 +307,7 @@ func p2pFindPeer(ctx context.Context, node host.Host, kadDHT *dht.IpfsDHT, peerI
     return PeerStatus{ addrInfo.ID, addrInfo.Addrs, false }, nil
 }
 
-func p2pSetupStreamHandlers(node host.Host, kadDHT *dht.IpfsDHT, messages chan string) {
-    //Handler for /orcanet/p2p/seawolf/messages protocol for simple message sending
-    node.SetStreamHandler("/orcanet/p2p/seawolf/messages", func(s network.Stream) {
-        defer s.Close()
-        buf := bufio.NewReader(s)
-        message, err := buf.ReadString('\n')
-        if err != nil {
-            if err != io.EOF {
-                log.Printf("/orcanet/p2p/seawolf/messages: Error reading from stream: %v\n", err)
-                return
-            }
-        } else {
-            message = message[:len(message) - 1] //Remove new line
-        }
-        log.Printf("/orcanet/p2p/seawolf/messages: Got new message: %v\n", message)
-        messages <- message
-    })
+func p2pSetupStreamHandlers(node host.Host, kadDHT *dht.IpfsDHT) {
     //Handler for /orcanet/p2p for peer discovery
     relayInfo, _ := peer.AddrInfoFromString(relayNodeAddr)
     node.SetStreamHandler("/orcanet/p2p", func(s network.Stream) {
