@@ -1,3 +1,4 @@
 *.db
 *.sock
 bin/*
+seawolf_p2p
