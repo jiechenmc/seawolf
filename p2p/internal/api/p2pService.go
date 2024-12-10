@@ -296,14 +296,13 @@ func (s *P2PService) GetFile(providerID string, cid string, outputFile string) (
     return sessionID, nil
 }
 
-func (s *P2PService) GetUploadedFiles() ([]FileShareUploadedFile, error) {
+func (s *P2PService) GetUploadedFiles() ([]FileShareFile, error) {
     if s.username == nil || s.fsNode == nil {
         log.Printf("Attempted to get accept chat request when not logged in\n")
         return nil, notLoggedIn
     }
     return s.fsNode.GetUploadedFiles()
 }
-
 
 func (s *P2PService) Pause(sessionID int) error {
     if s.username == nil || s.fsNode == nil {

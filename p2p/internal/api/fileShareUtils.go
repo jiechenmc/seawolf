@@ -12,6 +12,8 @@ import (
     "strings"
     "encoding/binary"
     "path/filepath"
+    "crypto/sha256"
+    "github.com/multiformats/go-multihash"
     "github.com/libp2p/go-libp2p/core/host"
     "github.com/libp2p/go-libp2p/core/peer"
     "github.com/libp2p/go-libp2p/core/network"
@@ -44,9 +46,11 @@ type FileShareNode struct {
     host host.Host
     kadDHT *dht.IpfsDHT
     bstore blockstore.Blockstore
+    fstore map[cid.Cid]string
     mstore map[cid.Cid]FileShareFileMeta
     sessionStore map[int]*FileShareSession
     rSessionStore map[peer.ID]map[int]*FileShareRemoteSession
+    fstoreLock sync.Mutex
     mstoreLock sync.Mutex
     sessionStoreLock sync.Mutex
     rSessionStoreLock sync.Mutex
@@ -100,9 +104,14 @@ type FileShareFileMeta struct {
     Name string             `json:"file_name"`
 }
 
-type FileShareUploadedFile struct {
+type FileShareFile struct {
     FileShareFileMeta
     DataCid string                  `json:"data_cid"`
+}
+
+type DataBuffer struct {
+    data []byte
+    err error
 }
 
 func (r *FileShareFileMeta) Marshal() ([]byte, error) {
@@ -195,10 +204,12 @@ func FileShareNodeCreate(node host.Host, kadDHT *dht.IpfsDHT) *FileShareNode {
         host: node,
         kadDHT: kadDHT,
         bstore: blkStore,
+        fstore: make(map[cid.Cid]string),
         mstore: make(map[cid.Cid]FileShareFileMeta),
         sessionStore: make(map[int]*FileShareSession),
         rSessionStore: make(map[peer.ID]map[int]*FileShareRemoteSession),
         mstoreLock: sync.Mutex{},
+        fstoreLock: sync.Mutex{},
         sessionStoreLock: sync.Mutex{},
         rSessionStoreLock: sync.Mutex{},
     }
@@ -220,7 +231,6 @@ func FileShareNodeCreate(node host.Host, kadDHT *dht.IpfsDHT) *FileShareNode {
             if err != nil || cid != diskCid {
                 // Remove corrupted entry with invalid cid or file
                 dbRemoveFile(nil, node.ID().String(), cidStr)
-                continue
             }
         }
     }
@@ -297,12 +307,11 @@ func (f *FileShareNode) handleWantHave(ctx context.Context, stream *P2PStream) e
         if err != nil {
             return err
         }
-        //Query local blockstore for cid
-        has, err := f.bstore.Has(ctx, cid)
-        if err != nil {
-            return err
-        }
-        if has {
+        //Query local fstore for cid
+        f.fstoreLock.Lock()
+        _, ok := f.fstore[cid]
+        f.fstoreLock.Unlock()
+        if ok {
             haveCids = append(haveCids, cid)
         }
     }
@@ -380,44 +389,36 @@ func (f *FileShareNode) handleWantData(ctx context.Context, stream *P2PStream) e
         return err
     }
 
-    //Query local blockstore for CID
-    has, err := f.bstore.Has(ctx, cid)
-    if err == nil && has {
-        block, err := f.bstore.Get(ctx, cid)
+    //Query local fstore for CID
+    f.fstoreLock.Lock()
+    fileName, ok := f.fstore[cid]
+    f.fstoreLock.Unlock()
+    if ok {
+        dataChannel, size, err := readFile(fileShareUploadsDirectory + "/" + fileName)
         if err != nil {
             goto Failed
         }
-        node, err := dag.DecodeProtobuf(block.RawData())
-        if err != nil {
-            goto Failed
-        }
-        data := node.Data()
-
         rSession := f.RemoteSessionCreate(stream.RemotePeerID, remoteSessionID)
         defer f.RemoteSessionCleanup(rSession)
 
-        err = stream.SendString(fmt.Sprintf("HERE\n%d\n", len(data)))
+        err = stream.SendString(fmt.Sprintf("HERE\n%d\n", size))
         if err != nil {
             return err
         }
         //Send the data chunk by chunk
-        for byteOffset := 0; byteOffset < len(data); byteOffset += chunkSize {
+        for buf := range dataChannel {
+            if buf.err != nil {
+                return buf.err
+            }
             //If paused, wait till resumed
             rSession.Wait()
 
-            txBytes := 0
-            if (byteOffset + chunkSize) > len(data) {
-                err = stream.Send(data[byteOffset:])
-                txBytes += len(data) - byteOffset
-            } else {
-                err = stream.Send(data[byteOffset:byteOffset + chunkSize])
-                txBytes += chunkSize
-            }
+            err = stream.Send(buf.data)
             if err != nil {
                 return err
             }
             rSession.txBytesLock.Lock()
-            rSession.txBytes += uint64(txBytes)
+            rSession.txBytes += uint64(len(buf.data))
             rSession.txBytesLock.Unlock()
         }
     } else {
@@ -643,11 +644,10 @@ func (f *FileShareNode) ResumeSession(sessionID int) error {
 }
 
 func (f *FileShareNode) HasFile(fileCid cid.Cid) bool {
-    has, err := f.bstore.Has(context.Background(), fileCid)
-    if err != nil {
-        return false
-    }
-    return has
+    f.fstoreLock.Lock()
+    _, ok := f.fstore[fileCid]
+    f.fstoreLock.Unlock()
+    return ok
 }
 
 func (s *FileShareSession) GetStream(peerID peer.ID) (*P2PStream, error) {
@@ -834,7 +834,7 @@ func (s *FileShareSession) SendWantMeta(peerID peer.ID, c cid.Cid) []byte {
     return nil
 }
 
-func (s *FileShareSession) SendWantData(peerID peer.ID, c cid.Cid) chan []byte {
+func (s *FileShareSession) SendWantData(peerID peer.ID, c cid.Cid) chan DataBuffer {
     reqLock := s.GetRequestLock(peerID)
     reqLock.Lock()
     defer reqLock.Unlock()
@@ -860,7 +860,7 @@ func (s *FileShareSession) SendWantData(peerID peer.ID, c cid.Cid) chan []byte {
         if err != nil {
             return nil
         }
-        dataChannel := make(chan []byte)
+        dataChannel := make(chan DataBuffer)
         var chunkData []byte
         go func() {
             for byteOffset := 0; byteOffset < size; byteOffset += chunkSize {
@@ -873,10 +873,11 @@ func (s *FileShareSession) SendWantData(peerID peer.ID, c cid.Cid) chan []byte {
                     chunkData, err = s.read(peerID, chunkSize, fileShareWantHaveTimeout)
                 }
                 if err != nil {
+                    dataChannel <- DataBuffer{ nil, err }
                     close(dataChannel)
                     return
                 }
-                dataChannel <- chunkData
+                dataChannel <- DataBuffer{ chunkData, nil }
                 s.statsLock.Lock()
                 s.RxBytes+= uint64(len(chunkData))
                 s.statsLock.Unlock()
@@ -985,7 +986,16 @@ func (f *FileShareNode) GetFile(ctx context.Context, providerIDStr string, rootC
         return -1, invalidParams
     }
 
-    tmpOutputFile := outputFile + ".tmp"
+    tmpOutputFile, err := filepath.Abs(outputFile + ".tmp")
+    if err != nil {
+        log.Printf("Failed to resolve filepath. %v\n", outputFile)
+        return -1, invalidParams
+    }
+    outputFile, err = filepath.Abs(outputFile)
+    if err != nil {
+        log.Printf("Failed to resolve filepath. %v\n", outputFile)
+        return -1, invalidParams
+    }
 
     //Open temporary file
     file, err := os.Create(tmpOutputFile)
@@ -1004,29 +1014,26 @@ func (f *FileShareNode) GetFile(ctx context.Context, providerIDStr string, rootC
     }()
 
     var bytes []byte
-    var dataChannel chan []byte
-    var ok bool
+    var dataChannel chan DataBuffer
     reqCid := rootCid
     fileMeta := FileShareFileMeta{}
-    //Check local blockstore before asking peers
-    has, err := f.bstore.Has(ctx, reqCid)
-    if err != nil {
-        return -1, internalError
-    }
-    if has {
+    //Check local file store before asking peers
+    f.fstoreLock.Lock()
+    _, ok := f.fstore[reqCid]
+    f.fstoreLock.Unlock()
+    if ok {
         f.mstoreLock.Lock()
         fileMeta, ok = f.mstore[reqCid]
         f.mstoreLock.Unlock()
         if !ok {
+            log.Printf("Failed to find metadata for our own uploaded file")
             return -1, internalError
         }
-        block, err := f.bstore.Get(ctx, reqCid)
+        dataChannel, _, err = readFile(fileShareUploadsDirectory + "/" + fileMeta.Name)
         if err != nil {
+            log.Printf("Failed to get file.\n")
             return -1, internalError
         }
-        bytes = block.RawData()
-        dataChannel <- bytes
-        close(dataChannel)
     } else {
         bytes = session.SendWantMeta(providerID, reqCid)
         if bytes == nil {
@@ -1047,56 +1054,109 @@ func (f *FileShareNode) GetFile(ctx context.Context, providerIDStr string, rootC
 
     deferCleanup = false
     go func() {
+        sessionStatusCode := 0
         bytesWritten := uint64(0)
-        for data := range dataChannel {
-            file.Write(data)
-            bytesWritten += uint64(len(data))
+        hash := sha256.New()
+        var dataCid cid.Cid
+        var err error
+        var mh multihash.Multihash
+        for buf := range dataChannel {
+            if buf.err != nil {
+                file.Close()
+                sessionStatusCode = 1
+                goto Failed
+            }
+            _, hashErr := hash.Write(buf.data)
+            if hashErr != nil {
+                log.Printf("Failed to write to hash. %v", hashErr)
+                sessionStatusCode = 1
+                file.Close()
+                goto Failed
+            }
+            _, fileErr := file.Write(buf.data)
+            if hashErr != nil {
+                log.Printf("Failed to write to file. %v", fileErr)
+                sessionStatusCode = 1
+                file.Close()
+                goto Failed
+            }
+            bytesWritten += uint64(len(buf.data))
         }
         file.Close()
-        if bytesWritten != fileMeta.Size {
-            f.SessionCleanup(session, 1)
-            log.Printf("Wrong number of bytes received\n")
-            return
-        }
-        //TODO compute hash to verify integrity of file
-        err = os.Rename(outputFile + ".tmp", outputFile)
+        //Compute hash to verify integrity of file
+        mh, err = multihash.Encode(hash.Sum([]byte{}), multihash.SHA2_256)
         if err != nil {
-            f.SessionCleanup(session, 1)
+            log.Printf("Failed to create multihash. %v\n", err)
+            goto Failed
+        }
+        dataCid = cid.NewCidV1(cid.Raw, mh)
+
+        if dataCid != reqCid {
+            log.Printf("Cid mismatch!\n")
+            sessionStatusCode = -1
+            goto Failed
+        }
+
+        err = os.Rename(tmpOutputFile, outputFile)
+        if err != nil {
             log.Printf("Failed to move temporary file to output file. %v\n")
-            return
+            sessionStatusCode = 1
+            goto Failed
         }
         f.SessionCleanup(session, 0)
+Failed:
+        os.Remove(tmpOutputFile)
+        f.SessionCleanup(session, sessionStatusCode)
     }()
     return session.SessionID, nil
 }
 
 func (f *FileShareNode) PutFile(ctx context.Context, inputFile string, price float64) (cid.Cid, error) {
     //Open input file for reading
-    buffer, err := readFile(inputFile)
+    dataChannel, bytesRead, err := readFile(inputFile)
     if err != nil {
         return cid.Cid{}, err
     }
-    bytesRead := len(buffer)
-    //Create data node and link it with root node
-    node := dag.NodeWithData(buffer).Copy()
+
+    // Compute running hash for cid
+    hash := sha256.New()
+    for buf := range dataChannel {
+        if buf.err != nil {
+            return cid.Cid{}, buf.err
+        }
+        _, err = hash.Write(buf.data)
+        if err != nil {
+            log.Printf("Failed to write to running hash. %v\n", err)
+            return cid.Cid{}, internalError
+        }
+    }
+    mh, err := multihash.Encode(hash.Sum([]byte{}), multihash.SHA2_256)
+    if err != nil {
+        log.Printf("Failed to create multihash. %v\n", err)
+        return cid.Cid{}, internalError
+    }
+    dataCid := cid.NewCidV1(cid.Raw, mh)
 
     //Create metadata node
     filename := filepath.Base(inputFile)
     fileMeta := FileShareFileMeta{ Size: uint64(bytesRead), Price: price, Name: filename }
 
-    f.bstore.Put(ctx, node)
+    // f.bstore.Put(ctx, node)
+    f.fstoreLock.Lock()
+    f.fstore[dataCid] = filename
+    f.fstoreLock.Unlock()
 
     f.mstoreLock.Lock()
-    f.mstore[node.Cid()] = fileMeta
+    f.mstore[dataCid] = fileMeta
     f.mstoreLock.Unlock()
 
-    err = f.kadDHT.Provide(ctx, node.Cid(), true)
+    err = f.kadDHT.Provide(ctx, dataCid, true)
     if err != nil {
         log.Printf("Failed to provide cid. %v\n", err)
         return cid.Cid{}, internalError
     }
     // Record file into database
-    err = dbAddFile(nil, f.host.ID().String(), node.Cid().String(), filename, price)
+    err = dbAddFile(nil, f.host.ID().String(), dataCid.String(), filename, price)
     if err != nil {
         log.Printf("Failed to record file into database. %v\n", err)
         return cid.Cid{}, internalError
@@ -1128,7 +1188,7 @@ func (f *FileShareNode) PutFile(ctx context.Context, inputFile string, price flo
         }
     }
 
-    return node.Cid(), nil
+    return dataCid, nil
 }
 
 func (f *FileShareNode) Discover(ctx context.Context) []FileShareFileDiscoveryInfo {
@@ -1299,51 +1359,63 @@ func fileShareFindProviders(ctx context.Context, kadDHT *dht.IpfsDHT, requestCid
 }
 
 
-func (f *FileShareNode) GetUploadedFiles() ([]FileShareUploadedFile, error) {
-    f.mstoreLock.Lock()
-    files := make([]FileShareUploadedFile, 0, len(f.mstore))
-    for cid, fileMetadata := range f.mstore {
-        has, err := f.bstore.Has(context.Background(), cid)
-        if err == nil && has {
-            files = append(files, FileShareUploadedFile {
+func (f *FileShareNode) GetUploadedFiles() ([]FileShareFile, error) {
+    f.fstoreLock.Lock()
+    files := make([]FileShareFile, 0, len(f.fstore))
+    for cid, _ := range f.fstore {
+        f.mstoreLock.Lock()
+        fileMetadata, ok := f.mstore[cid]
+        f.mstoreLock.Unlock()
+        if ok {
+            files = append(files, FileShareFile {
                 fileMetadata,
                 cid.String(),
             })
         }
     }
-    f.mstoreLock.Unlock()
+    f.fstoreLock.Unlock()
     return files, nil
 }
 
-func readFile(filePath string) ([]byte, error) {
+func readFile(filePath string) (chan DataBuffer, int64, error) {
     absFilePath, err := filepath.Abs(filePath)
     if err != nil {
         log.Printf("Failed to resolve file path to upload directory")
-        return nil, failedToOpenFile
+        return nil, int64(0), failedToOpenFile
     }
     //Open input file for reading
     file, err := os.OpenFile(absFilePath, os.O_RDONLY, 0644)
     if err != nil {
         log.Printf("Error opening file: %v. %v\n", filePath, err)
-        return nil, failedToOpenFile
+        return nil, int64(0), failedToOpenFile
     }
-    defer file.Close()
-    buffer := []byte{}
+    stat, err := file.Stat()
+    if err != nil {
+        log.Printf("Error stat file: %v. %v\n", filePath, err)
+        file.Close()
+        return nil, int64(0), failedToOpenFile
+    }
+    dataChannel := make(chan DataBuffer, 2)
 
-    for {
-        tempBuffer := make([]byte, chunkSize)
-        n, err := file.Read(tempBuffer)
-        if err != nil && err != io.EOF {
-            log.Printf("Error reading file: %v. %v\n", filePath, err)
-            return nil, internalError
-        } else {
-            if n == 0 && err == io.EOF {
+    go func() {
+        for {
+            tempBuffer := make([]byte, chunkSize)
+            n, err := file.Read(tempBuffer)
+            if err != nil && err != io.EOF {
+                log.Printf("Error reading file: %v. %v\n", filePath, err)
+                dataChannel <- DataBuffer{ nil, internalError }
                 break
+            } else {
+                if n == 0 && err == io.EOF {
+                    break
+                }
             }
+            dataChannel <- DataBuffer{ tempBuffer[:n], nil }
         }
-        buffer = append(buffer, tempBuffer[:n]...)
-    }
-    return buffer, nil
+        close(dataChannel)
+        file.Close()
+    }()
+    return dataChannel, stat.Size(), nil
 }
 
 func copyFile(srcFilePath string, dstFilePath string) error {
