@@ -1303,10 +1303,13 @@ func (f *FileShareNode) GetUploadedFiles() ([]FileShareUploadedFile, error) {
     f.mstoreLock.Lock()
     files := make([]FileShareUploadedFile, 0, len(f.mstore))
     for cid, fileMetadata := range f.mstore {
-        files = append(files, FileShareUploadedFile { 
-            fileMetadata,
-            cid.String(),
-        })
+        has, err := f.bstore.Has(context.Background(), cid)
+        if err == nil && has {
+            files = append(files, FileShareUploadedFile {
+                fileMetadata,
+                cid.String(),
+            })
+        }
     }
     f.mstoreLock.Unlock()
     return files, nil
