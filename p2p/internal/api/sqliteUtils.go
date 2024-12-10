@@ -16,9 +16,12 @@ const createWalletTableQuery = `CREATE TABLE IF NOT EXISTS wallets
                                     (id INTEGER PRIMARY KEY, username TEXT UNIQUE, rpc_username TEXT,
                                      rpc_password_ciphertext TEXT, rpc_password_salt TEXT)`
 
-const createFileTableQuery = `CREATE TABLE IF NOT EXISTS files
-                              (id INTEGER PRIMARY KEY, peer_id TEXT , cid TEXT, filename TEXT, price FLOAT)`
+const createUploadTableQuery = `CREATE TABLE IF NOT EXISTS uploads
+                              (id INTEGER PRIMARY KEY, peer_id TEXT, cid TEXT, filename TEXT, price FLOAT, size INTEGER)`
 
+
+const createDownloadTableQuery = `CREATE TABLE IF NOT EXISTS downloads
+                                 (id INTEGER PRIMARY KEY, peer_id TEXT, provider_id TEXT, cid TEXT, filename TEXT, price FLOAT, size INTEGER)`
 
 func dbOpen() (*sql.DB, error) {
     db, err := sql.Open("sqlite3", databasePath)
@@ -43,8 +46,16 @@ func dbOpen() (*sql.DB, error) {
         return db, internalError
     }
 
-    //Create files table if doesn't exist
-    _, err = db.Exec(createFileTableQuery)
+    //Create uploads table if doesn't exist
+    _, err = db.Exec(createUploadTableQuery)
+    if err != nil {
+        db.Close()
+        log.Printf("Failed to create file table. %v\n", err)
+        return db, internalError
+    }
+
+    //Create downloads table if doesn't exist
+    _, err = db.Exec(createDownloadTableQuery)
     if err != nil {
         db.Close()
         log.Printf("Failed to create file table. %v\n", err)
@@ -198,7 +209,7 @@ func dbGetWallet(db *sql.DB, username string, rpcUsername *string, rpcPasswordCi
     return 1, nil
 }
 
-func dbAddFile(db *sql.DB, peerID string, cid string, filename string, price float64) error {
+func dbAddUpload(db *sql.DB, peerID string, cid string, filename string, price float64, size int64) error {
     var err error
     // Establish connection to database if doesn't exist
     if db == nil {
@@ -210,21 +221,23 @@ func dbAddFile(db *sql.DB, peerID string, cid string, filename string, price flo
     }
     var tmpCid string
     // Check if cid already exists
-    err = db.QueryRow(`SELECT cid FROM files WHERE cid= ? AND peer_id= ?`, cid, peerID).Scan(&tmpCid)
+    err = db.QueryRow(`SELECT cid FROM uploads WHERE cid= ? AND peer_id= ?`, cid, peerID).Scan(&tmpCid)
     if err != nil {
         if err == sql.ErrNoRows {
-            _, err = db.Exec(`INSERT INTO files (peer_id, cid, filename, price) VALUES (?, ?, ?, ?)`,
-                peerID,
-                cid,
-                filename,
-                price)
+            _, err = db.Exec(`INSERT INTO uploads (peer_id, cid, filename, price, size) VALUES (?, ?, ?, ?, ?)`,
+                             peerID,
+                             cid,
+                             filename,
+                             price,
+                             size)
         }
     } else {
-        _, err = db.Exec(`UPDATE files SET filename=?, price=? WHERE cid=? AND peer_id=?`,
-            filename,
-            price,
-            cid,
-            peerID)
+        _, err = db.Exec(`UPDATE uploads SET filename=?, price=?, size=? WHERE cid=? AND peer_id=?`,
+                         filename,
+                         price,
+                         size,
+                         cid,
+                         peerID)
     }
 
     if err != nil {
@@ -235,7 +248,7 @@ func dbAddFile(db *sql.DB, peerID string, cid string, filename string, price flo
     return nil
 }
 
-func dbGetFiles(db *sql.DB, peerID string) (map[string]FileShareFileMeta, error) {
+func dbGetUploads(db *sql.DB, peerID string) ([]FileShareFile, error) {
     var err error
     //Establish connection to database if doesn't exist
     if db == nil {
@@ -246,9 +259,9 @@ func dbGetFiles(db *sql.DB, peerID string) (map[string]FileShareFileMeta, error)
         defer db.Close()
     }
 
-    var files = make(map[string]FileShareFileMeta)
+    files := []FileShareFile{}
 
-    rows, err := db.Query(`SELECT cid, filename, price FROM files WHERE peer_id= ?`, peerID)
+    rows, err := db.Query(`SELECT cid, filename, price, size FROM uploads WHERE peer_id= ?`, peerID)
     if err != nil {
         if err == sql.ErrNoRows {
             return files, nil
@@ -260,19 +273,20 @@ func dbGetFiles(db *sql.DB, peerID string) (map[string]FileShareFileMeta, error)
     var cid string
     var filename string
     var price float64
+    var size int64
     for rows.Next() {
-        err := rows.Scan(&cid, &filename, &price)
+        err := rows.Scan(&cid, &filename, &price, &size)
         if err != nil {
             log.Printf("Failed to scan rows from SQL query. %v\n", err);
             return nil, internalError
         }
-        files[cid] = FileShareFileMeta{ Size: 0, Price: price, Name: filename }
+        files = append(files, FileShareFile{ FileShareMeta{ Size: size, Price: price, Name: filename }, cid, peerID })
     }
 
     return files, nil
 }
 
-func dbRemoveFile(db *sql.DB, peerID string, cidStr string) error {
+func dbRemoveUpload(db *sql.DB, peerID string, cidStr string) error {
     var err error
     //Establish connection to database if doesn't exist
     if db == nil {
@@ -283,7 +297,7 @@ func dbRemoveFile(db *sql.DB, peerID string, cidStr string) error {
         defer db.Close()
     }
 
-    _, err = db.Exec(`DELETE FROM files WHERE peer_id=? AND cid=?`, peerID, cidStr)
+    _, err = db.Exec(`DELETE FROM uploads WHERE peer_id=? AND cid=?`, peerID, cidStr)
     if err != nil {
         if err == sql.ErrNoRows {
             return nil
@@ -293,4 +307,69 @@ func dbRemoveFile(db *sql.DB, peerID string, cidStr string) error {
     }
 
     return nil
+}
+
+func dbAddDownload(db *sql.DB, peerID string, providerID string, cid string, filename string, price float64, size int64) error {
+    var err error
+    // Establish connection to database if doesn't exist
+    if db == nil {
+        db, err = dbOpen()
+        if err != nil {
+            return err
+        }
+        defer db.Close()
+    }
+    _, err = db.Exec(`INSERT INTO downloads (peer_id, provider_id, cid, filename, price, size) VALUES (?, ?, ?, ?, ?, ?)`,
+                     peerID,
+                     providerID,
+                     cid,
+                     filename,
+                     price,
+                     size)
+
+    if err != nil {
+        log.Printf("Failed to push downloads into database. %v\n", err)
+        return internalError
+    }
+
+    return nil
+}
+
+func dbGetDownloads(db *sql.DB, peerID string) ([]FileShareFile, error) {
+    var err error
+    //Establish connection to database if doesn't exist
+    if db == nil {
+        db, err = dbOpen()
+        if err != nil {
+            return nil, err
+        }
+        defer db.Close()
+    }
+
+    files := []FileShareFile{}
+
+    rows, err := db.Query(`SELECT provider_id, cid, filename, price, size FROM downloads WHERE peer_id= ?`, peerID)
+    if err != nil {
+        if err == sql.ErrNoRows {
+            return files, nil
+        }
+        log.Printf("Failed to query SQLITE database. %v\n", err)
+        return nil, internalError
+    }
+
+    var providerID string
+    var cid string
+    var filename string
+    var price float64
+    var size int64
+    for rows.Next() {
+        err := rows.Scan(&providerID, &cid, &filename, &price, &size)
+        if err != nil {
+            log.Printf("Failed to scan rows from SQL query. %v\n", err);
+            return nil, internalError
+        }
+        files = append(files, FileShareFile{ FileShareMeta{ Size: size, Price: price, Name: filename }, cid, providerID })
+    }
+
+    return files, nil
 }

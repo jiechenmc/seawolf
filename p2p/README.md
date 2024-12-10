@@ -212,7 +212,7 @@ SessionID: int - session ID of the requested session
 None
 ```
 
-## p2p_getUploadedFiles
+## p2p_getUploads
 Gets all uploaded files
 
 #### Parameters
@@ -226,6 +226,26 @@ None
     "price":        int     - price of the file
     "file_name":    string  - name of file
     "data_cid":     string  - cid of file
+    "provider_id":  string  - peer id of provider
+}]
+
+```
+
+## p2p_getDownloads
+Gets all downloaded files
+
+#### Parameters
+```
+None
+```
+#### Returns
+```
+[{
+    "size":         int     - size of file in bytes
+    "price":        int     - price of the file
+    "file_name":    string  - name of file
+    "data_cid":     string  - cid of file
+    "provider_id":  string  - peer id of provider
 }]
 
 ```
@@ -366,7 +386,8 @@ Get specific chat given chat id and remote peer id
 
 #### Parameters
 ```
-None
+PeerID  string  - remote peer ID
+ChatID  int     - chat ID
 ```
 #### Returns
 ```

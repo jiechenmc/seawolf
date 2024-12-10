@@ -47,7 +47,7 @@ type FileShareNode struct {
     kadDHT *dht.IpfsDHT
     bstore blockstore.Blockstore
     fstore map[cid.Cid]string
-    mstore map[cid.Cid]FileShareFileMeta
+    mstore map[cid.Cid]FileShareMeta
     sessionStore map[int]*FileShareSession
     rSessionStore map[peer.ID]map[int]*FileShareRemoteSession
     fstoreLock sync.Mutex
@@ -65,7 +65,7 @@ type Pausable struct {
 type FileShareSession struct {
     SessionID int                   `json:"session_id"`
     ReqCid string                   `json:"req_cid"`
-    RxBytes uint64                  `json:"rx_bytes"`
+    RxBytes int64                   `json:"rx_bytes"`
     Complete bool                   `json:"is_complete"`
     Result int                      `json:"result"`
     Pausable
@@ -82,12 +82,12 @@ type FileShareRemoteSession struct {
     remoteSessionID int
     remotePeerID peer.ID
     txBytesLock sync.Mutex
-    txBytes uint64
+    txBytes int64
     Pausable
 }
 
 type FileShareFileDiscoveryInfo struct {
-    Size uint64                     `json:"size"`
+    Size int64                      `json:"size"`
     DataCid string                  `json:"data_cid"`
     Providers []FileShareProvider   `json:"providers"`
 }
@@ -98,15 +98,16 @@ type FileShareProvider struct {
     Name string             `json:"file_name"`
 }
 
-type FileShareFileMeta struct {
-    Size uint64             `json:"size"`
+type FileShareMeta struct {
+    Size int64              `json:"size"`
     Price float64           `json:"price"`
     Name string             `json:"file_name"`
 }
 
 type FileShareFile struct {
-    FileShareFileMeta
+    FileShareMeta
     DataCid string                  `json:"data_cid"`
+    ProviderID string               `json:"provider_id"`
 }
 
 type DataBuffer struct {
@@ -114,7 +115,7 @@ type DataBuffer struct {
     err error
 }
 
-func (r *FileShareFileMeta) Marshal() ([]byte, error) {
+func (r *FileShareMeta) Marshal() ([]byte, error) {
     var nameByteLen uint8
     if len(r.Name) > 255 {
         return nil, invalidParams
@@ -129,7 +130,7 @@ func (r *FileShareFileMeta) Marshal() ([]byte, error) {
     return bytes, nil
 }
 
-func (r *FileShareFileMeta) Unmarshal(bytes []byte) error {
+func (r *FileShareMeta) Unmarshal(bytes []byte) error {
     var nameByteLen uint8
 
     buf := libbytes.NewReader(bytes)
@@ -205,7 +206,7 @@ func FileShareNodeCreate(node host.Host, kadDHT *dht.IpfsDHT) *FileShareNode {
         kadDHT: kadDHT,
         bstore: blkStore,
         fstore: make(map[cid.Cid]string),
-        mstore: make(map[cid.Cid]FileShareFileMeta),
+        mstore: make(map[cid.Cid]FileShareMeta),
         sessionStore: make(map[int]*FileShareSession),
         rSessionStore: make(map[peer.ID]map[int]*FileShareRemoteSession),
         mstoreLock: sync.Mutex{},
@@ -217,20 +218,20 @@ func FileShareNodeCreate(node host.Host, kadDHT *dht.IpfsDHT) *FileShareNode {
     node.SetStreamHandler(fileShareProtocol, fsNode.fileShareStreamHandler)
 
     // Read files database for existing uploaded files
-    fileMetadataMap, err := dbGetFiles(nil, node.ID().String())
+    files, err := dbGetUploads(nil, node.ID().String())
     if err == nil {
-        for cidStr, fileMeta := range fileMetadataMap {
-            cid, err := cid.Decode(cidStr)
+        for _, file := range files {
+            cid, err := cid.Decode(file.DataCid)
             if err != nil {
                 // Remove corrupted entry with invalid cid
-                dbRemoveFile(nil, node.ID().String(), cidStr)
+                dbRemoveUpload(nil, node.ID().String(), file.DataCid)
                 continue
             }
 
-            diskCid, err := fsNode.PutFile(context.Background(), fileShareUploadsDirectory + "/" + fileMeta.Name, fileMeta.Price)
+            diskCid, err := fsNode.PutFile(context.Background(), fileShareUploadsDirectory + "/" + file.Name, file.Price)
             if err != nil || cid != diskCid {
                 // Remove corrupted entry with invalid cid or file
-                dbRemoveFile(nil, node.ID().String(), cidStr)
+                dbRemoveUpload(nil, node.ID().String(), file.DataCid)
             }
         }
     }
@@ -418,7 +419,7 @@ func (f *FileShareNode) handleWantData(ctx context.Context, stream *P2PStream) e
                 return err
             }
             rSession.txBytesLock.Lock()
-            rSession.txBytes += uint64(len(buf.data))
+            rSession.txBytes += int64(len(buf.data))
             rSession.txBytesLock.Unlock()
         }
     } else {
@@ -550,7 +551,7 @@ func (f *FileShareNode) SessionCreate(ctx context.Context, reqCidStr string) *Fi
         reqLocks: make(map[peer.ID]*sync.Mutex),
         reqLocksLock: sync.Mutex{},
         ReqCid: reqCidStr,
-        RxBytes: uint64(0),
+        RxBytes: int64(0),
         Complete: false,
         Result: 0,
     }
@@ -590,7 +591,7 @@ func (f *FileShareNode) RemoteSessionCreate(remotePeerID peer.ID, remoteSessionI
             remotePeerID: remotePeerID,
             Pausable: *NewPausable(),
             txBytesLock: sync.Mutex{},
-            txBytes: uint64(0),
+            txBytes: int64(0),
         }
         f.rSessionStore[remotePeerID][remoteSessionID] = rSession
     }
@@ -879,7 +880,7 @@ func (s *FileShareSession) SendWantData(peerID peer.ID, c cid.Cid) chan DataBuff
                 }
                 dataChannel <- DataBuffer{ chunkData, nil }
                 s.statsLock.Lock()
-                s.RxBytes+= uint64(len(chunkData))
+                s.RxBytes+= int64(len(chunkData))
                 s.statsLock.Unlock()
             }
             close(dataChannel)
@@ -973,10 +974,10 @@ func (s *FileShareSession) SendDiscover(peerID peer.ID, maxCount int) []cid.Cid 
 }
 
 
-func (f *FileShareNode) GetFile(ctx context.Context, providerIDStr string, rootCidStr string, outputFile string) (int, error) {
-    rootCid, err := cid.Decode(rootCidStr)
+func (f *FileShareNode) GetFile(ctx context.Context, providerIDStr string, reqCidStr string, outputFile string) (int, error) {
+    reqCid, err := cid.Decode(reqCidStr)
     if err != nil {
-        log.Printf("Failed to decode cid %v. %v", rootCid, err)
+        log.Printf("Failed to decode cid %v. %v", reqCidStr, err)
         return -1, invalidParams
     }
 
@@ -1005,7 +1006,7 @@ func (f *FileShareNode) GetFile(ctx context.Context, providerIDStr string, rootC
     }
     deferCleanup := true
     //Create a fileshare session
-    session := f.SessionCreate(ctx, rootCidStr)
+    session := f.SessionCreate(ctx, reqCidStr)
     defer func() {
         if deferCleanup {
             file.Close()
@@ -1015,8 +1016,7 @@ func (f *FileShareNode) GetFile(ctx context.Context, providerIDStr string, rootC
 
     var bytes []byte
     var dataChannel chan DataBuffer
-    reqCid := rootCid
-    fileMeta := FileShareFileMeta{}
+    fileMeta := FileShareMeta{}
     //Check local file store before asking peers
     f.fstoreLock.Lock()
     _, ok := f.fstore[reqCid]
@@ -1055,7 +1055,7 @@ func (f *FileShareNode) GetFile(ctx context.Context, providerIDStr string, rootC
     deferCleanup = false
     go func() {
         sessionStatusCode := 0
-        bytesWritten := uint64(0)
+        bytesWritten := int64(0)
         hash := sha256.New()
         var dataCid cid.Cid
         var err error
@@ -1080,7 +1080,7 @@ func (f *FileShareNode) GetFile(ctx context.Context, providerIDStr string, rootC
                 file.Close()
                 goto Failed
             }
-            bytesWritten += uint64(len(buf.data))
+            bytesWritten += int64(len(buf.data))
         }
         file.Close()
         //Compute hash to verify integrity of file
@@ -1103,6 +1103,9 @@ func (f *FileShareNode) GetFile(ctx context.Context, providerIDStr string, rootC
             sessionStatusCode = 1
             goto Failed
         }
+
+        dbAddDownload(nil, f.host.ID().String(), providerIDStr, reqCidStr, fileMeta.Name, fileMeta.Price, fileMeta.Size)
+
         f.SessionCleanup(session, 0)
 Failed:
         os.Remove(tmpOutputFile)
@@ -1139,7 +1142,7 @@ func (f *FileShareNode) PutFile(ctx context.Context, inputFile string, price flo
 
     //Create metadata node
     filename := filepath.Base(inputFile)
-    fileMeta := FileShareFileMeta{ Size: uint64(bytesRead), Price: price, Name: filename }
+    fileMeta := FileShareMeta{ Size: bytesRead, Price: price, Name: filename }
 
     // f.bstore.Put(ctx, node)
     f.fstoreLock.Lock()
@@ -1156,7 +1159,7 @@ func (f *FileShareNode) PutFile(ctx context.Context, inputFile string, price flo
         return cid.Cid{}, internalError
     }
     // Record file into database
-    err = dbAddFile(nil, f.host.ID().String(), dataCid.String(), filename, price)
+    err = dbAddUpload(nil, f.host.ID().String(), dataCid.String(), filename, price, bytesRead)
     if err != nil {
         log.Printf("Failed to record file into database. %v\n", err)
         return cid.Cid{}, internalError
@@ -1291,7 +1294,7 @@ func (s *FileShareSession) DiscoverFile(ctx context.Context, reqCid cid.Cid, pro
             if len(fileDiscovery.Providers) == providers {
                 return
             }
-            fileMeta := FileShareFileMeta{}
+            fileMeta := FileShareMeta{}
             var ok bool
             //Get metadata
             if provider.ID == s.node.host.ID() {
@@ -1359,7 +1362,7 @@ func fileShareFindProviders(ctx context.Context, kadDHT *dht.IpfsDHT, requestCid
 }
 
 
-func (f *FileShareNode) GetUploadedFiles() ([]FileShareFile, error) {
+func (f *FileShareNode) GetUploads() ([]FileShareFile, error) {
     f.fstoreLock.Lock()
     files := make([]FileShareFile, 0, len(f.fstore))
     for cid, _ := range f.fstore {
@@ -1370,11 +1373,16 @@ func (f *FileShareNode) GetUploadedFiles() ([]FileShareFile, error) {
             files = append(files, FileShareFile {
                 fileMetadata,
                 cid.String(),
+                f.host.ID().String(),
             })
         }
     }
     f.fstoreLock.Unlock()
     return files, nil
+}
+
+func (f *FileShareNode) GetDownloads() ([]FileShareFile, error) {
+    return dbGetDownloads(nil, f.host.ID().String())
 }
 
 func readFile(filePath string) (chan DataBuffer, int64, error) {
