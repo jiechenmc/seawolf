@@ -1121,11 +1121,9 @@ func (f *FileShareNode) PutFile(ctx context.Context, inputFile string, price flo
             log.Printf("Failed to create uploads directory. %v\n", err)
             return cid.Cid{}, internalError
         }
-        // TODO if link fails, fall back to copying the file
-        os.Remove(fileShareUploadsDirectory + "/" + filename);
-        err = os.Link(inputFile, fileShareUploadsDirectory + "/" + filename)
+        err = copyFile(inputFile, fileShareUploadsDirectory + "/" + filename)
         if err != nil {
-            log.Printf("Failed to link uploaded file. %v\n", err)
+            log.Printf("Failed to copy file to upload directory. %v\n", err)
             return cid.Cid{}, internalError
         }
     }
@@ -1343,4 +1341,54 @@ func readFile(filePath string) ([]byte, error) {
         buffer = append(buffer, tempBuffer[:n]...)
     }
     return buffer, nil
+}
+
+func copyFile(srcFilePath string, dstFilePath string) error {
+    srcAbsFilePath, err := filepath.Abs(srcFilePath)
+    if err != nil {
+        log.Printf("Failed to resolve file path to src directory")
+        return failedToOpenFile
+    }
+    dstAbsFilePath, err := filepath.Abs(dstFilePath)
+    if err != nil {
+        log.Printf("copyFile: Failed to resolve file path to dst directory")
+        return failedToOpenFile
+    }
+    if srcAbsFilePath == dstAbsFilePath {
+        return nil
+    }
+    //Open src file for reading
+    srcFile, err := os.OpenFile(srcAbsFilePath, os.O_RDONLY, 0644)
+    if err != nil {
+        log.Printf("Error opening file: %v. %v\n", srcFilePath, err)
+        return failedToOpenFile
+    }
+    defer srcFile.Close()
+    //Open dst file for writing
+    dstFile, err := os.OpenFile(dstAbsFilePath + ".tmp", os.O_RDWR | os.O_TRUNC | os.O_CREATE, 0700)
+    if err != nil {
+        log.Printf("Error opening file: %v. %v\n", dstFilePath, err)
+        return failedToOpenFile
+    }
+    defer dstFile.Close()
+
+    tempBuffer := make([]byte, chunkSize)
+    for {
+        n, err := srcFile.Read(tempBuffer)
+        if err != nil && err != io.EOF {
+            log.Printf("Error reading file: %v. %v\n", srcFilePath, err)
+            return internalError
+        } else {
+            if n == 0 && err == io.EOF {
+                break
+            }
+        }
+        _, err = dstFile.Write(tempBuffer[:n])
+        if err != nil {
+            log.Printf("Error writing to file: %v. %v\n", dstFilePath, err)
+            os.Remove(dstAbsFilePath)
+            return internalError
+        }
+    }
+    return os.Rename(dstAbsFilePath + ".tmp", dstAbsFilePath)
 }
