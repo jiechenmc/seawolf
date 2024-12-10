@@ -296,9 +296,17 @@ func (s *P2PService) GetFile(providerID string, cid string, outputFile string) (
     return sessionID, nil
 }
 
+func (s *P2PService) DeleteFile(cid string) error {
+    if s.username == nil || s.fsNode == nil {
+        log.Printf("Attempted to delete file when not logged in\n")
+        return notLoggedIn
+    }
+    return s.fsNode.DeleteFile(cid)
+}
+
 func (s *P2PService) GetUploads() ([]FileShareFile, error) {
     if s.username == nil || s.fsNode == nil {
-        log.Printf("Attempted to get accept chat request when not logged in\n")
+        log.Printf("Attempted to get uploads when not logged in\n")
         return nil, notLoggedIn
     }
     return s.fsNode.GetUploads()
@@ -306,7 +314,7 @@ func (s *P2PService) GetUploads() ([]FileShareFile, error) {
 
 func (s *P2PService) GetDownloads() ([]FileShareFile, error) {
     if s.username == nil || s.fsNode == nil {
-        log.Printf("Attempted to get accept chat request when not logged in\n")
+        log.Printf("Attempted to get downloads when not logged in\n")
         return nil, notLoggedIn
     }
     return s.fsNode.GetDownloads()
@@ -314,7 +322,7 @@ func (s *P2PService) GetDownloads() ([]FileShareFile, error) {
 
 func (s *P2PService) Pause(sessionID int) error {
     if s.username == nil || s.fsNode == nil {
-        log.Printf("Attempted to put file when not logged in\n")
+        log.Printf("Attempted to pause session when not logged in\n")
         return notLoggedIn
     }
     err := s.fsNode.PauseSession(sessionID)
@@ -326,7 +334,7 @@ func (s *P2PService) Pause(sessionID int) error {
 
 func (s *P2PService) Resume(sessionID int) error {
     if s.username == nil || s.fsNode == nil {
-        log.Printf("Attempted to put file when not logged in\n")
+        log.Printf("Attempted to resume session when not logged in\n")
         return notLoggedIn
     }
     err := s.fsNode.ResumeSession(sessionID)
@@ -338,7 +346,7 @@ func (s *P2PService) Resume(sessionID int) error {
 
 func (s *P2PService) GetSession(sessionID int) (*FileShareSession, error) {
     if s.username == nil || s.fsNode == nil {
-        log.Printf("Attempted to put file when not logged in\n")
+        log.Printf("Attempted to get session when not logged in\n")
         return nil, notLoggedIn
     }
     session, err := s.fsNode.GetSession(sessionID)
@@ -350,7 +358,7 @@ func (s *P2PService) GetSession(sessionID int) (*FileShareSession, error) {
 
 func (s *P2PService) FindProviders(cid string) ([]peer.AddrInfo, error) {
     if s.username == nil || s.fsNode == nil {
-        log.Printf("Attempted to get provider when not logged in\n")
+        log.Printf("Attempted to find providers when not logged in\n")
         return nil, notLoggedIn
     }
     ctx := context.Background()

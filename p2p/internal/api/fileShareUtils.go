@@ -1048,7 +1048,7 @@ func (f *FileShareNode) GetFile(ctx context.Context, providerIDStr string, reqCi
         dataChannel = session.SendWantData(providerID, reqCid)
         if dataChannel == nil {
             log.Printf("Failed to get file.\n")
-            return -1, internalError
+            return -1, contentNotFound
         }
     }
 
@@ -1384,6 +1384,46 @@ func (f *FileShareNode) GetUploads() ([]FileShareFile, error) {
 func (f *FileShareNode) GetDownloads() ([]FileShareFile, error) {
     return dbGetDownloads(nil, f.host.ID().String())
 }
+
+func (f *FileShareNode) DeleteFile(dataCidStr string) error {
+    dataCid, err := cid.Decode(dataCidStr)
+    if err != nil {
+        log.Printf("Failed to decode cid %v. %v", dataCidStr, err)
+        return invalidParams
+    }
+    // Search for metadata in mstore and file entry in fstore
+    f.mstoreLock.Lock()
+    defer f.mstoreLock.Unlock()
+    _, metaOk := f.mstore[dataCid]
+
+    // f.bstore.Put(ctx, node)
+    f.fstoreLock.Lock()
+    defer f.fstoreLock.Unlock()
+    fileName, fileOk := f.fstore[dataCid]
+
+    if !fileOk || !metaOk {
+        return contentNotFound
+    }
+
+    // Remove file from database
+    err = dbRemoveUpload(nil, f.host.ID().String(), dataCid.String())
+    if err != nil {
+        return internalError
+    }
+
+    delete(f.fstore, dataCid)
+    delete(f.mstore, dataCid)
+
+    filePath, err := filepath.Abs(fileShareUploadsDirectory + "/" + fileName)
+    if err != nil {
+        log.Printf("Failed to resolve absolute path for upload file path. %v\n", err)
+        return nil // Not the end of the world if we can't find the file to delete
+    }
+    os.Remove(filePath)
+
+    return nil
+}
+
 
 func readFile(filePath string) (chan DataBuffer, int64, error) {
     absFilePath, err := filepath.Abs(filePath)

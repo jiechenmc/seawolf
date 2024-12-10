@@ -34,6 +34,8 @@ curl -X POST \
 
 # API:
 
+## NOTE: Return objects have an 'error' field if request has failed
+
 ## p2p_register
 Creates a new user
 
@@ -77,7 +79,7 @@ string - "success"
 ```
 
 
-### p2p_getPeers
+## p2p_getPeers
 Returns all known peers and their status
 
 #### Parameters
@@ -156,7 +158,7 @@ Price:    float  - price of the file
 ```
 CID: string - CID of file
 ```
-### p2p_getFile
+## p2p_getFile
 Downloads a file
 
 #### Parameters
@@ -250,7 +252,17 @@ None
 
 ```
 
+## p2p_deleteFile
+Deletes an uploaded file
 
+#### Parameters
+```
+CID: string - CID of file
+```
+#### Returns
+```
+None
+```
 
 
 ## p2p_sendChatRequest
