@@ -200,6 +200,26 @@ func FileShareNodeCreate(node host.Host, kadDHT *dht.IpfsDHT) *FileShareNode {
 
     node.SetStreamHandler(fileShareProtocol, fsNode.fileShareStreamHandler)
 
+    // Read files database for existing uploaded files
+    fileMetadataMap, err := dbGetFiles(nil, node.ID().String())
+    if err == nil {
+        for cidStr, fileMeta := range fileMetadataMap {
+            cid, err := cid.Decode(cidStr)
+            if err != nil {
+                // Remove corrupted entry with invalid cid
+                dbRemoveFile(nil, node.ID().String(), cidStr)
+                continue
+            }
+
+            diskCid, err := fsNode.PutFile(context.Background(), fileShareUploadsDirectory + "/" + fileMeta.Name, fileMeta.Price)
+            if err != nil || cid != diskCid {
+                // Remove corrupted entry with invalid cid or file
+                dbRemoveFile(nil, node.ID().String(), cidStr)
+                continue
+            }
+        }
+    }
+
     return fsNode
 }
 

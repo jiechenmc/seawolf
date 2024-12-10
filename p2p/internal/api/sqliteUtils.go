@@ -248,7 +248,7 @@ func dbGetFiles(db *sql.DB, peerID string) (map[string]FileShareFileMeta, error)
 
     var files = make(map[string]FileShareFileMeta)
 
-    rows, err := db.Query(`SELECT cid, filename, price FROM users WHERE peer_id= ?`, peerID)
+    rows, err := db.Query(`SELECT cid, filename, price FROM files WHERE peer_id= ?`, peerID)
     if err != nil {
         if err == sql.ErrNoRows {
             return files, nil
@@ -270,4 +270,27 @@ func dbGetFiles(db *sql.DB, peerID string) (map[string]FileShareFileMeta, error)
     }
 
     return files, nil
+}
+
+func dbRemoveFile(db *sql.DB, peerID string, cidStr string) error {
+    var err error
+    //Establish connection to database if doesn't exist
+    if db == nil {
+        db, err = dbOpen()
+        if err != nil {
+            return err
+        }
+        defer db.Close()
+    }
+
+    _, err = db.Exec(`DELETE FROM files WHERE peer_id=? AND cid=?`, peerID, cidStr)
+    if err != nil {
+        if err == sql.ErrNoRows {
+            return nil
+        }
+        log.Printf("Failed to delete file from SQLITE database. %v\n", err)
+        return internalError
+    }
+
+    return nil
 }
