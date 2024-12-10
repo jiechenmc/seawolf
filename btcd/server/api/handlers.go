@@ -85,11 +85,10 @@ func (app *App) AccountHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	fmt.Printf("/account: %+v\n", data)
 
-	address, err := GetAccountAddress(app.RpcClient, data.Account)
-
+	err = CreateAccount(app.RpcClient, data.Account, app.Passphrase)
 	if err != nil {
 		WriteErrorResponse(w, err)
 	} else {
-		WriteSuccessResponse(w, address.String())
+		WriteSuccessResponse(w, "account created")
 	}
 }

@@ -116,6 +116,7 @@ None
         {
             "peer_id":      string  - peer id of provider
             "price":        int     - price of the file
+            "metadata_cid": string  - cid of metadata
             "file_name":    string  - name of file
         },
         ...
@@ -124,11 +125,11 @@ None
 ```
 
 ## p2p_discoverFile
-Discovers providers for a specific file given a CID
+Discovers providers for a specific file given data CID or metadata CID
 
 #### Parameters
 ```
-CID: string - file CID
+CID: string - data CID or metadata CID
 ```
 #### Returns
 ```
@@ -139,6 +140,7 @@ CID: string - file CID
         {
             "peer_id":      string  - peer id of provider
             "price":        int     - price of the file
+            "metadata_cid": string  - cid of metadata
             "file_name":    string  - name of file
         },
         ...
@@ -156,7 +158,7 @@ Price:    float  - price of the file
 ```
 #### Returns
 ```
-CID: string - CID of file
+CID: string - metadata CID of file
 ```
 ## p2p_getFile
 Downloads a file
@@ -164,7 +166,7 @@ Downloads a file
 #### Parameters
 ```
 ProviderPeerID:   string - peer ID of the provider node
-CID:              string - file CID
+CID:              string - data or metadata CID
 DownloadFilePath: string - destination file path
 ```
 #### Returns

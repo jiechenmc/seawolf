@@ -34,17 +34,16 @@ func CreateAccount(client *rpcclient.Client, accountName string, passphrase stri
 	return err
 }
 
-//@ NOT USED
-// func GetAddressesByAccount(client *rpcclient.Client, account string) ([]btcutil.Address, error) {
-// 	return client.GetAddressesByAccount(account)
-// }
+func GetAddressesByAccount(client *rpcclient.Client, account string) ([]btcutil.Address, error) {
+	return client.GetAddressesByAccount(account)
+}
 
 func GetAccountAddress(client *rpcclient.Client, account string) (btcutil.Address, error) {
 	return client.GetAccountAddress(account)
 }
 
 func GetAccountFromAddress(client *rpcclient.Client, addressStr string) (string, error) {
-	address, err := btcutil.DecodeAddress(addressStr, &chaincfg.MainNetParams)
+	address, err := btcutil.DecodeAddress(addressStr, &chaincfg.SimNetParams)
 	if err != nil {
 		return "", err
 	}
@@ -64,7 +63,8 @@ func SendToAddress(client *rpcclient.Client, fromAccount string, addressStr stri
 		return nil, err
 	}
 
-	address, err := btcutil.DecodeAddress(addressStr, &chaincfg.MainNetParams)
+	// TODO: change this when we start to connect to the TA's network
+	address, err := btcutil.DecodeAddress(addressStr, &chaincfg.SimNetParams)
 
 	if err != nil {
 		// log.Fatalf("Failed to decode address: %v", err)

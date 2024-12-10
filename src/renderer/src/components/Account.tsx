@@ -1,5 +1,4 @@
 import SideNav from './SideNav'
-import NavBar from './NavBar'
 import { FaRegClipboard } from 'react-icons/fa'
 import React, { useEffect, useState } from 'react'
 

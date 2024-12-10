@@ -1,5 +1,11 @@
 # Seawolf Exchange
 
+An Electron application with React and TypeScript
+
+## Recommended IDE Setup
+
+- [VSCode](https://code.visualstudio.com/) + [ESLint](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint) + [Prettier](https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode)
+
 ## Project Setup
 
 ### Install
@@ -14,6 +20,15 @@ $ npm install
 $ npm run dev
 ```
 
-### Backend
+### Build
 
-Put the wallet seed on LINE 12 in `docker-compose.yml`
+```bash
+# For windows
+$ npm run build:win
+
+# For macOS
+$ npm run build:mac
+
+# For Linux
+$ npm run build:linux
+```

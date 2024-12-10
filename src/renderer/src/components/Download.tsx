@@ -1,93 +1,93 @@
 import SideNav from './SideNav'
-import NavBar from './NavBar'
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { AppContext } from '../AppContext'
 import { FaRegTrashAlt } from 'react-icons/fa'
 import { FaRegCirclePause } from 'react-icons/fa6'
 import { FaRegPlayCircle } from 'react-icons/fa'
 
 type fileType = {
-  cid: number
-  name: string
   size: number
-  cost: number
+  price: number
+  file_name: string
+  data_cid: string
+  provider_id: string
 }
-
-const testDB: fileType[] = [
-  { cid: 3158518221, name: 'document1.pdf', size: 1, cost: 500 },
-  { cid: 7263573340, name: 'image2.png', size: 2, cost: 3 },
-  { cid: 9780383347, name: 'audio3.mp3', size: 3, cost: 10 },
-  { cid: 3529260449, name: 'video4.mp4', size: 4, cost: 15 },
-  { cid: 6043729820, name: 'spreadsheet5.xlsx', size: 5, cost: 7 }
-]
 
 function Download(): JSX.Element {
   const [searchHash, setSearchHash] = useState<string>('')
 
-  const { proxy, balance, downloadFiles, history } = React.useContext(AppContext)
+  const { proxy, balance, history } = React.useContext(AppContext)
   const [currProxy, setCurrProxy] = proxy
   const [walletBalance, setWalletBalance] = balance
-  const [downloadedFiles, setDownloadedFiles] = downloadFiles
   const [, setHistoryView] = history
 
-  const handleSearchFile = () => {
-    const found = testDB.find((file) => file.cid === Number(searchHash))
+  const [downloadedFiles, setDownloadedFiles] = useState<string>('')
 
-    if (found) {
-      let msg: string = `Name:  ${found.name}\nSize:  ${found.size} MB\nCost:  ${found.cost} SWE`
+  useEffect(() => {
 
-      if (walletBalance < found.cost) {
-        alert(`${msg}\n\nNot enough SWE. Your current balance: ${walletBalance}.`)
-      } else {
-        const confirmed = window.confirm(
-          `${msg}\n\nYou currently have ${walletBalance} SWE. Would like to proceed with the purchase?`
-        )
-        if (confirmed) {
-          setWalletBalance((currBalance: number) => currBalance - found.cost)
-          let newFileDownloaded = {
-            file: found,
-            eta: Math.floor(Math.random() * 29 + 1),
-            status: 'Downloading'
-          }
-          downloadedFiles.unshift(newFileDownloaded)
-          setDownloadedFiles(downloadedFiles)
-
-          setHistoryView((prevView) => {
-            const newHistory = [
-              {
-                date: new Date(),
-                file: newFileDownloaded.file,
-                type: 'downloaded',
-                proxy: currProxy ? currProxy.ip : 'self'
-              }
-            ]
-
-            return [...newHistory, ...prevView]
-          })
-        }
+    const fetchData = async () => {
+      try {
+        const data = await getUploadedFiles()
+        setUploadedFiles(data)
+        setFilesToView(uploadedFiles)
+      } catch (error) {
+        console.error('Error fetching uploaded files:', error)
       }
-    } else {
-      alert(`No file found with the hash: ${searchHash}`)
     }
 
-    setSearchHash('')
+    fetchData()
+  }, [])
+
+  const handleSearchFile = () => {
+    // const found =
+    // if (found) {
+    //   let msg: string = `Name:  ${found.name}\nSize:  ${found.size} MB\nCost:  ${found.cost} SWE`
+    //   if (walletBalance < found.cost) {
+    //     alert(`${msg}\n\nNot enough SWE. Your current balance: ${walletBalance}.`)
+    //   } else {
+    //     const confirmed = window.confirm(
+    //       `${msg}\n\nYou currently have ${walletBalance} SWE. Would like to proceed with the purchase?`
+    //     )
+    //     if (confirmed) {
+    //       setWalletBalance((currBalance: number) => currBalance - found.cost)
+    //       let newFileDownloaded = {
+    //         file: found,
+    //         eta: Math.floor(Math.random() * 29 + 1),
+    //         status: 'Downloading'
+    //       }
+    //       downloadedFiles.unshift(newFileDownloaded)
+    //       setDownloadedFiles(downloadedFiles)
+    //       setHistoryView((prevView) => {
+    //         const newHistory = [
+    //           {
+    //             date: new Date(),
+    //             file: newFileDownloaded.file,
+    //             type: 'downloaded',
+    //             proxy: currProxy ? currProxy.ip : 'self'
+    //           }
+    //         ]
+    //         return [...newHistory, ...prevView]
+    //       })
+    //     }
+    //   }
+    // } else {
+    //   alert(`No file found with the hash: ${searchHash}`)
+    // }
+    // setSearchHash('')
   }
 
   const handlePausePlay = (index: number) => {
-    setDownloadedFiles((prevFiles) => {
-      const updatedFiles = [...prevFiles]
-      const updatedFile = { ...updatedFiles[index] }
-
-      if (updatedFile.status === 'Downloading') {
-        updatedFile.status = 'Paused'
-      } else if (updatedFile.status === 'Paused') {
-        updatedFile.status = 'Downloading'
-      }
-
-      updatedFiles[index] = updatedFile
-
-      return updatedFiles
-    })
+    // setDownloadedFiles((prevFiles) => {
+    //   const updatedFiles = [...prevFiles]
+    //   const updatedFile = { ...updatedFiles[index] }
+    //   if (updatedFile.status === 'Downloading') {
+    //     updatedFile.status = 'Paused'
+    //   } else if (updatedFile.status === 'Paused') {
+    //     updatedFile.status = 'Downloading'
+    //   }
+    //   updatedFiles[index] = updatedFile
+    //   return updatedFiles
+    // })
   }
 
   const handleCancelDownload = (downloadedFile, index: number) => {
@@ -95,13 +95,12 @@ function Download(): JSX.Element {
       `Are you sure want to cancel download for: ${downloadedFile.file.name}`
     )
     if (confirmed) {
-      setDownloadedFiles((prevFiles) => {
-        setWalletBalance((prevBalance: number) => prevBalance + downloadedFile.file.cost)
-        const updatedFiles = [...prevFiles]
-        updatedFiles.splice(index, 1)
-
-        return updatedFiles
-      })
+      // setDownloadedFiles((prevFiles) => {
+      //   setWalletBalance((prevBalance: number) => prevBalance + downloadedFile.file.cost)
+      //   const updatedFiles = [...prevFiles]
+      //   updatedFiles.splice(index, 1)
+      //   return updatedFiles
+      // })
     }
   }
 

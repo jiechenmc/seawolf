@@ -7,7 +7,7 @@ import LoadingModal from './LoadingModal'
 import { loginUser } from '../rpcUtils'
 
 function Login(): JSX.Element {
-  const { user } = React.useContext(AppContext)
+  // const { user } = React.useContext(AppContext)
 
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -16,6 +16,10 @@ function Login(): JSX.Element {
 
   const navigate = useNavigate()
 
+  const { user } = React.useContext(AppContext)
+
+  const [, setPeerId] = user
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
@@ -23,6 +27,7 @@ function Login(): JSX.Element {
     try {
       const data = await loginUser(username, password)
       if (data) {
+        setPeerId(data)
         setLoading(false)
         navigate('upload')
       }

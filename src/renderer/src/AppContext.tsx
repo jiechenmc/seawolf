@@ -14,13 +14,6 @@ type fileType = {
   selectStatus?: boolean
 }
 
-// type fileType = {
-//   cid: number
-//   name: string
-//   size: number
-//   cost: number
-// }
-
 type ListingType = {
   cid: number
   name: string
@@ -37,12 +30,6 @@ type proxyType = {
   cost: number
 }
 
-// type downloadType = {
-//   file: fileType
-//   eta: number
-//   status: string
-// }
-
 type historyType = {
   date: Date
   file: fileType
@@ -54,27 +41,6 @@ const proxyTest: proxyType[] = [
   { ip: '192.168.1.1', location: 'New York, USA', cost: 10 },
   { ip: '192.168.1.2', location: 'London, UK', cost: 12 },
   { ip: '192.168.1.3', location: 'Tokyo, Japan', cost: 8 }
-]
-
-const downloadTest: fileType[] = [
-  {
-    cid: 2657828461,
-    fileName: 'something.pdf',
-    fileSize: 10,
-    fileCost: 14,
-    fileDownloadPath: 'downloadedFiles',
-    downloadEta: 0,
-    downloadStatus: 'completed'
-  },
-  {
-    cid: 9477837364,
-    fileName: 'another.pdf',
-    fileSize: 25,
-    fileCost: 20,
-    fileDownloadPath: 'downloadedFiles',
-    downloadEta: 10,
-    downloadStatus: 'completed'
-  }
 ]
 
 const historyTest: historyType[] = [
@@ -97,16 +63,12 @@ const historyTest: historyType[] = [
 const AppContext = createContext<any>(null)
 
 const AppProvider = ({ children }) => {
+  const [peerId, setPeerId] = useState<string>('')
+
   const [walletAddress, setWalletAddress] = useState<string | null>(null)
 
   const [numUploadedFiles, setNumUploadedFiles] = useState<number>(0)
   const [numUploadedBytes, setNumUploadedBytes] = useState<number>(0)
-
-  const [uploadedFiles, setUploadedFiles] = useState<fileType[]>([])
-  // const [filesToView, setFilesToView] = useState([])
-  // const [searchHash, setSeearchHash] = useState('')
-
-  const [downloadedFiles, setDownloadedFiles] = useState<fileType[]>(downloadTest)
 
   const [currProxy, setCurrProxy] = useState<proxyType | null>(null)
   const [listOfProxies, setListOfProxies] = useState<proxyType[]>(proxyTest)
@@ -121,11 +83,9 @@ const AppProvider = ({ children }) => {
   return (
     <AppContext.Provider
       value={{
-        user: [walletAddress, setWalletAddress],
+        user: [peerId, setPeerId],
         numUploadFiles: [numUploadedFiles, setNumUploadedFiles],
         numUploadBytes: [numUploadedBytes, setNumUploadedBytes],
-        uploadFiles: [uploadedFiles, setUploadedFiles],
-        downloadFiles: [downloadedFiles, setDownloadedFiles],
         proxy: [currProxy, setCurrProxy],
         proxies: [listOfProxies, setListOfProxies],
         balance: [walletBalance, setWalletBalance],

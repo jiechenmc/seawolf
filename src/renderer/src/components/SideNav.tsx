@@ -3,7 +3,7 @@ import Logo from '../assets/logo.png'
 import { FaMale, FaGlobeAmericas, FaSignOutAlt, FaShopify } from 'react-icons/fa'
 import { IoCloudUploadSharp } from 'react-icons/io5'
 import { IoIosCloudDownload } from 'react-icons/io'
-import { GiTwoCoins } from 'react-icons/gi'
+// import { GiTwoCoins } from 'react-icons/gi'
 import { useNavigate } from 'react-router-dom'
 import { logoutUser } from '@renderer/rpcUtils'
 
