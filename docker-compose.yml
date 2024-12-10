@@ -9,7 +9,7 @@ services:
       - ./btcd/btcwallet.conf:/root/.btcwallet/btcwallet.conf
       - ./btcd/server/:/app/server
     environment:
-      - WALLET_SEED=
+      - WALLET_SEED=7b7c9fade5188ba23147fe16f03fa3426dbdfe5c5af0cb2512fea300f24f682e
     tty: true
   
   p2p:

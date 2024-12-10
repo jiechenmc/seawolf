@@ -2,7 +2,6 @@ import SideNav from './SideNav'
 import NavBar from './NavBar'
 import { FaRegClipboard } from 'react-icons/fa'
 import React, { useEffect, useState } from 'react'
-import { AppContext } from '../AppContext'
 
 function formatDateTime(date: Date): string {
   const padToTwoDigits = (num: number) => (num < 10 ? `0${num}` : num)
@@ -16,6 +15,24 @@ function formatDateTime(date: Date): string {
   const seconds = padToTwoDigits(date.getSeconds())
 
   return `${month}/${day}/${year} ${hours}:${minutes}:${seconds}`
+}
+
+const tranferMoney = async (address: string, amount: number) => {
+
+  const r = await fetch("http://localhost:8080/transfer", {
+    method: "POST",
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ account: "default", address, amount })
+  })
+
+  const data = await r.json()
+
+  if (data.status != "success")
+    return "No money"
+
+  return data.message
 }
 
 function Account(): JSX.Element {
@@ -32,8 +49,7 @@ function Account(): JSX.Element {
 
   const [walletBalance, setWalletBalance] = useState(0)
   const [walletAddress, setWalletAddress] = useState("")
-
-  const { user, balance, history } = React.useContext(AppContext)
+  const [sentTxId, setTxId] = useState("")
 
   const [activeTab, setActiveTab] = useState<'Wallet' | 'History' | 'Settings'>('Wallet')
 
@@ -58,11 +74,15 @@ function Account(): JSX.Element {
       const data = await r.json()
       setWalletAddress(data.message)
     })
+
+    // tranferMoney("1P3JSQhXCj2iUeNb1rDzrxSNry7PukwXKJ", 1).then(d => setTxId(d))
   }, [])
+
+  console.log(sentTxId)
 
   // const [walletAddress] = user
   // const [walletBalance] = balance
-  const [historyView] = history
+  // const [historyView] = history
 
   return (
     <div className="flex ml-52">
@@ -128,7 +148,7 @@ function Account(): JSX.Element {
                 <span className="flex-1 font-semibold">Proxy</span>
               </div>
             </div>
-            {historyView.map((historyItem, index: number) => (
+            {/* {historyView.map((historyItem, index: number) => (
               <div
                 key={index}
                 className="flex items-center px-2 py-1 border-b border-gray-300 rounded-md"
@@ -144,7 +164,7 @@ function Account(): JSX.Element {
                 <span className="flex-1 ">{historyItem.type}</span>
                 <span className="flex-1 ">{historyItem.proxy}</span>
               </div>
-            ))}
+            ))} */}
           </div>
         )}
 

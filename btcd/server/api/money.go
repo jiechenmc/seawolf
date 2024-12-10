@@ -44,7 +44,7 @@ func GetAccountAddress(client *rpcclient.Client, account string) (btcutil.Addres
 }
 
 func GetAccountFromAddress(client *rpcclient.Client, addressStr string) (string, error) {
-	address, err := btcutil.DecodeAddress(addressStr, &chaincfg.SimNetParams)
+	address, err := btcutil.DecodeAddress(addressStr, &chaincfg.MainNetParams)
 	if err != nil {
 		return "", err
 	}
@@ -64,8 +64,7 @@ func SendToAddress(client *rpcclient.Client, fromAccount string, addressStr stri
 		return nil, err
 	}
 
-	// TODO: change this when we start to connect to the TA's network
-	address, err := btcutil.DecodeAddress(addressStr, &chaincfg.SimNetParams)
+	address, err := btcutil.DecodeAddress(addressStr, &chaincfg.MainNetParams)
 
 	if err != nil {
 		// log.Fatalf("Failed to decode address: %v", err)
