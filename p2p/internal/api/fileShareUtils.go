@@ -1460,8 +1460,8 @@ func readFile(filePath string) (chan DataBuffer, int64, error) {
             }
             dataChannel <- DataBuffer{ tempBuffer[:n], nil }
         }
-        close(dataChannel)
         file.Close()
+        close(dataChannel)
     }()
     return dataChannel, stat.Size(), nil
 }
@@ -1493,13 +1493,14 @@ func copyFile(srcFilePath string, dstFilePath string) error {
         log.Printf("Error opening file: %v. %v\n", dstFilePath, err)
         return failedToOpenFile
     }
-    defer dstFile.Close()
 
     tempBuffer := make([]byte, chunkSize)
     for {
         n, err := srcFile.Read(tempBuffer)
         if err != nil && err != io.EOF {
+            dstFile.Close()
             log.Printf("Error reading file: %v. %v\n", srcFilePath, err)
+            os.Remove(dstAbsFilePath + ".tmp")
             return internalError
         } else {
             if n == 0 && err == io.EOF {
@@ -1508,10 +1509,12 @@ func copyFile(srcFilePath string, dstFilePath string) error {
         }
         _, err = dstFile.Write(tempBuffer[:n])
         if err != nil {
+            dstFile.Close()
             log.Printf("Error writing to file: %v. %v\n", dstFilePath, err)
-            os.Remove(dstAbsFilePath)
+            os.Remove(dstAbsFilePath + ".tmp")
             return internalError
         }
     }
+    dstFile.Close()
     return os.Rename(dstAbsFilePath + ".tmp", dstAbsFilePath)
 }
