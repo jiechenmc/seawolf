@@ -1,7 +1,7 @@
 import SideNav from './SideNav'
 import NavBar from './NavBar'
 import { FaRegClipboard } from 'react-icons/fa'
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { AppContext } from '../AppContext'
 
 function formatDateTime(date: Date): string {
@@ -30,12 +30,38 @@ function Account(): JSX.Element {
       })
   }
 
+  const [walletBalance, setWalletBalance] = useState(0)
+  const [walletAddress, setWalletAddress] = useState("")
+
   const { user, balance, history } = React.useContext(AppContext)
 
   const [activeTab, setActiveTab] = useState<'Wallet' | 'History' | 'Settings'>('Wallet')
 
-  const [walletAddress] = user
-  const [walletBalance] = balance
+  useEffect(() => {
+    fetch("http://localhost:8080/balance?q=default", {
+      headers: {
+        'Content-Type': 'application/json'
+      },
+    }).then(async (r) => {
+      const data = await r.json()
+      setWalletBalance(parseInt(data))
+    })
+
+    fetch("http://localhost:8080/account", {
+      method: "POST",
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ account: "default" })
+    }
+    ).then(async (r) => {
+      const data = await r.json()
+      setWalletAddress(data.message)
+    })
+  }, [])
+
+  // const [walletAddress] = user
+  // const [walletBalance] = balance
   const [historyView] = history
 
   return (
@@ -71,7 +97,7 @@ function Account(): JSX.Element {
             <div className="flex justify-between mb-16">
               <div className="bg-white p-4 rounded-lg shadow-md w-1/2">
                 <div className="flex items-center mb-3">
-                  <h3 className="text-lg font-semibold">Wallet ID: {walletAddress}</h3>
+                  <h3 className="text-lg font-semibold">Wallet Address: {walletAddress}</h3>
                   <button
                     onClick={handleCopyToClipboard}
                     className="ml-2 p-1 hover:bg-gray-200 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"

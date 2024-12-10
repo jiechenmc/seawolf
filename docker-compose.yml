@@ -3,11 +3,13 @@ services:
     build: btcd
     network_mode: host
     volumes:
-      - BTCWALLET:/root/.btcwallet
-      - BTCD:/root/.btcd
+      # - BTCWALLET:/root/.btcwallet
+      # - BTCD:/root/.btcd
       - ./btcd/btcd.conf:/root/.btcd/btcd.conf
       - ./btcd/btcwallet.conf:/root/.btcwallet/btcwallet.conf
       - ./btcd/server/:/app/server
+    environment:
+      - WALLET_SEED=
     tty: true
   
   p2p:
@@ -19,6 +21,6 @@ services:
     network_mode: host
 
 
-volumes:
-  BTCWALLET:
-  BTCD:
+# volumes:
+#   BTCWALLET:
+#   BTCD:

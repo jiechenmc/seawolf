@@ -34,9 +34,10 @@ func CreateAccount(client *rpcclient.Client, accountName string, passphrase stri
 	return err
 }
 
-func GetAddressesByAccount(client *rpcclient.Client, account string) ([]btcutil.Address, error) {
-	return client.GetAddressesByAccount(account)
-}
+//@ NOT USED
+// func GetAddressesByAccount(client *rpcclient.Client, account string) ([]btcutil.Address, error) {
+// 	return client.GetAddressesByAccount(account)
+// }
 
 func GetAccountAddress(client *rpcclient.Client, account string) (btcutil.Address, error) {
 	return client.GetAccountAddress(account)

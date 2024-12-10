@@ -137,6 +137,20 @@ func spawnWallet(ctx context.Context, seed string) *exec.Cmd {
 	return cmd
 }
 
+func enableCORS(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+		if r.Method == "OPTIONS" {
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
 func main() {
 	// Only override the handlers for notifications you care about.
 	// Also note most of the handlers will only be called if you register
@@ -147,7 +161,8 @@ func main() {
 	defer stop()
 
 	spawnBtcd(ctx)
-	spawnWallet(ctx, "7b7c9fade5188ba23147fe16f03fa3426dbdfe5c5af0cb2512fea300f24f682e")
+	// "7b7c9fade5188ba23147fe16f03fa3426dbdfe5c5af0cb2512fea300f24f682e"
+	spawnWallet(ctx, os.Getenv("WALLET_SEED"))
 
 	ntfnHandlers := rpcclient.NotificationHandlers{}
 
@@ -188,9 +203,9 @@ func main() {
 		Passphrase: "cse416",
 	}
 
-	http.HandleFunc("/balance", app.BalanceHandler)
-	http.HandleFunc("/transfer", app.TransferHandler)
-	http.HandleFunc("/account", app.AccountHandler)
+	http.HandleFunc("/balance", corsMiddleware(app.BalanceHandler))
+	http.HandleFunc("/transfer", corsMiddleware(app.TransferHandler))
+	http.HandleFunc("/account", corsMiddleware(app.AccountHandler))
 
 	fmt.Println("Server is listening on port 8080...")
 	err = http.ListenAndServe(":8080", nil) // Start the HTTP server on port 8080
@@ -200,4 +215,22 @@ func main() {
 	}
 	<-ctx.Done()
 	defer client.Shutdown()
+}
+
+func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Set CORS headers
+		w.Header().Set("Access-Control-Allow-Origin", "*") // Replace * with specific origin(s) if needed
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Content-Security-Policy")
+
+		// Handle preflight request
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		// Call the next handler
+		next(w, r)
+	}
 }
