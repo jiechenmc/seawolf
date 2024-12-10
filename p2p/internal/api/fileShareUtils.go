@@ -97,7 +97,12 @@ type FileShareProvider struct {
 type FileShareFileMeta struct {
     Size uint64             `json:"size"`
     Price float64           `json:"price"`
-    Name string             `json:"name"`
+    Name string             `json:"file_name"`
+}
+
+type FileShareUploadedFile struct {
+    FileShareFileMeta
+    DataCid string                  `json:"data_cid"`
 }
 
 func (r *FileShareFileMeta) Marshal() ([]byte, error) {
@@ -1067,38 +1072,17 @@ func (f *FileShareNode) GetFile(ctx context.Context, providerIDStr string, rootC
 
 func (f *FileShareNode) PutFile(ctx context.Context, inputFile string, price float64) (cid.Cid, error) {
     //Open input file for reading
-    file, err := os.OpenFile(inputFile, os.O_RDONLY, 0644)
+    buffer, err := readFile(inputFile)
     if err != nil {
-        log.Printf("Error opening file: %v. %v\n", inputFile, err)
-        return cid.Cid{}, failedToOpenFile
+        return cid.Cid{}, err
     }
-    defer file.Close()
-    buffer := []byte{}
-    bytesRead := 0
-
-    for {
-        tempBuffer := make([]byte, chunkSize)
-        n, err := file.Read(tempBuffer)
-        if err != nil && err != io.EOF {
-            log.Printf("Error reading file: %v. %v\n", inputFile, err)
-            return cid.Cid{}, internalError
-        } else {
-            if n == 0 && err == io.EOF {
-                break
-            }
-        }
-        for i := 0; i < n; i ++ {
-            buffer = append(buffer, tempBuffer[i])
-        }
-        bytesRead += n
-    }
+    bytesRead := len(buffer)
+    //Create data node and link it with root node
+    node := dag.NodeWithData(buffer).Copy()
 
     //Create metadata node
     filename := filepath.Base(inputFile)
     fileMeta := FileShareFileMeta{ Size: uint64(bytesRead), Price: price, Name: filename }
-
-    //Create data node and link it with root node
-    node := dag.NodeWithData(buffer).Copy()
 
     f.bstore.Put(ctx, node)
 
@@ -1314,4 +1298,49 @@ func fileShareFindProviders(ctx context.Context, kadDHT *dht.IpfsDHT, requestCid
 	}
 
     return providers, nil
+}
+
+
+func (f *FileShareNode) GetUploadedFiles() ([]FileShareUploadedFile, error) {
+    f.mstoreLock.Lock()
+    files := make([]FileShareUploadedFile, 0, len(f.mstore))
+    for cid, fileMetadata := range f.mstore {
+        files = append(files, FileShareUploadedFile { 
+            fileMetadata,
+            cid.String(),
+        })
+    }
+    f.mstoreLock.Unlock()
+    return files, nil
+}
+
+func readFile(filePath string) ([]byte, error) {
+    absFilePath, err := filepath.Abs(filePath)
+    if err != nil {
+        log.Printf("Failed to resolve file path to upload directory")
+        return nil, failedToOpenFile
+    }
+    //Open input file for reading
+    file, err := os.OpenFile(absFilePath, os.O_RDONLY, 0644)
+    if err != nil {
+        log.Printf("Error opening file: %v. %v\n", filePath, err)
+        return nil, failedToOpenFile
+    }
+    defer file.Close()
+    buffer := []byte{}
+
+    for {
+        tempBuffer := make([]byte, chunkSize)
+        n, err := file.Read(tempBuffer)
+        if err != nil && err != io.EOF {
+            log.Printf("Error reading file: %v. %v\n", filePath, err)
+            return nil, internalError
+        } else {
+            if n == 0 && err == io.EOF {
+                break
+            }
+        }
+        buffer = append(buffer, tempBuffer[:n]...)
+    }
+    return buffer, nil
 }

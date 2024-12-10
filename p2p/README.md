@@ -212,6 +212,27 @@ SessionID: int - session ID of the requested session
 None
 ```
 
+## p2p_getUploadedFiles
+Gets all uploaded files
+
+#### Parameters
+```
+None
+```
+#### Returns
+```
+[{
+    "size":         int     - size of file in bytes
+    "price":        int     - price of the file
+    "file_name":    string  - name of file
+    "data_cid":     string  - cid of file
+}]
+
+```
+
+
+
+
 ## p2p_sendChatRequest
 Sends a request to chat to a provider of a file
 
