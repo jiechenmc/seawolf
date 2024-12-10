@@ -561,6 +561,13 @@ func (f *FileShareNode) SessionCleanup(session *FileShareSession, result int) {
     session.Complete = true
     session.Result = result
     session.statsLock.Unlock()
+
+    session.streamLock.Lock()
+    for peerID, stream := range session.streamMap {
+        stream.Close()
+        delete(session.streamMap, peerID)
+    }
+    session.streamLock.Unlock()
 }
 
 func (f *FileShareNode) RemoteSessionCreate(remotePeerID peer.ID, remoteSessionID int) *FileShareRemoteSession {
