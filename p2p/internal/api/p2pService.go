@@ -185,6 +185,7 @@ func (s *P2PService) Logout() (string, error) {
     if s.username == nil {
         return "", notLoggedIn
     }
+    (*s.p2pHost).Close()
     s.username = nil;
     s.fsNode = nil;
     s.p2pHost = nil;

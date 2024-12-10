@@ -1111,18 +1111,32 @@ func (f *FileShareNode) PutFile(ctx context.Context, inputFile string, price flo
         return cid.Cid{}, internalError
     }
 
-    // Copy file to files directory
-    err = os.MkdirAll(fileShareUploadsDirectory, 0750)
-    if err != nil && !os.IsExist(err) {
-        log.Printf("Failed to create uploads directory. %v\n", err)
+    inputFilepath, err := filepath.Abs(inputFile)
+    if err != nil {
+        log.Printf("Failed to resolve absolute path for input file path. %v\n", err)
         return cid.Cid{}, internalError
     }
-    // TODO if link fails, fall back to copying the file
-    os.Remove(fileShareUploadsDirectory + "/" + filename);
-    err = os.Link(inputFile, fileShareUploadsDirectory + "/" + filename)
+    dstFilePath, err := filepath.Abs(fileShareUploadsDirectory + "/" + filename)
     if err != nil {
-        log.Printf("Failed to link uploaded file. %v\n", err)
+        log.Printf("Failed to resolve absolute path for upload directory path. %v\n", err)
         return cid.Cid{}, internalError
+    }
+
+    // No need to copy to uploaded files directory if input file is already there
+    if inputFilepath != dstFilePath {
+        // Copy file to files directory
+        err = os.MkdirAll(fileShareUploadsDirectory, 0750)
+        if err != nil && !os.IsExist(err) {
+            log.Printf("Failed to create uploads directory. %v\n", err)
+            return cid.Cid{}, internalError
+        }
+        // TODO if link fails, fall back to copying the file
+        os.Remove(fileShareUploadsDirectory + "/" + filename);
+        err = os.Link(inputFile, fileShareUploadsDirectory + "/" + filename)
+        if err != nil {
+            log.Printf("Failed to link uploaded file. %v\n", err)
+            return cid.Cid{}, internalError
+        }
     }
 
     return node.Cid(), nil
