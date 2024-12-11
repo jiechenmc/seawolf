@@ -122,7 +122,7 @@ func dbAddUser(db *sql.DB, username string, passwordHash []byte, privateKeyCiphe
 
     _, err = db.Exec(`INSERT INTO users
                      (username, password_hash, private_key_ciphertext, private_key_iv, private_key_salt, wallet_address)
-                     VALUES (?, ?, ?, ?, ?)`,
+                     VALUES (?, ?, ?, ?, ?, ?)`,
                      username,
                      hex.EncodeToString(passwordHash),
                      hex.EncodeToString(privateKeyCiphertext),
