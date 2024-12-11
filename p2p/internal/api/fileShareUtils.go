@@ -1150,7 +1150,7 @@ func (f *FileShareNode) GetFile(ctx context.Context, providerIDStr string, reqCi
 
         err = os.Rename(tmpOutputFile, outputFile)
         if err != nil {
-            log.Printf("Failed to move temporary file to output file. %v\n")
+            log.Printf("Failed to move temporary file to output file. %v\n", err)
             sessionStatusCode = 1
             goto Failed
         }
