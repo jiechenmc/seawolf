@@ -3,6 +3,7 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import os from 'os'
+import path from 'path'
 
 function createWindow(): void {
   // Create the browser window.
@@ -73,6 +74,10 @@ app.on('window-all-closed', () => {
 
 ipcMain.handle('get-platform', () => {
   return os.platform()
+})
+
+ipcMain.handle('get-download-path', () => {
+  return path.resolve(__dirname, '../../downloads')
 })
 
 // In this file you can include the rest of your app"s specific main process

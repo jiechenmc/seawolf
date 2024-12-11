@@ -147,9 +147,164 @@ export async function getUploadedFiles(id: number = 1): Promise<any> {
   })
 
   const data = await response.json()
-  console.log('uploaded files are: ', data)
+
   if (data.error) {
     throw new Error('Error getting uploaded files: ', data.error)
+  }
+
+  return data.result
+}
+
+export async function getDownloadedFiles(id: number = 1): Promise<any> {
+  const request = {
+    jsonrpc: '2.0',
+    id: id,
+    method: 'p2p_getDownloads',
+    params: []
+  }
+
+  const response = await fetch(`http://localhost:${PORT}/rpc`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(request)
+  })
+
+  const data = await response.json()
+
+  if (data.error) {
+    throw new Error('Error getting downloaded files: ', data.error)
+  }
+
+  return data.result
+}
+
+export async function discoverFile(cid: string, id: number = 1): Promise<any> {
+  const request = {
+    jsonrpc: '2.0',
+    id: id,
+    method: 'p2p_discoverFile',
+    params: [cid]
+  }
+
+  const response = await fetch(`http://localhost:${PORT}/rpc`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(request)
+  })
+
+  const data = await response.json()
+
+  if (data.error) {
+    throw new Error('Error getting providers for a file: ', data.error)
+  }
+
+  return data.result
+}
+
+export async function getFile(
+  peer_id: string,
+  cid: string,
+  download_path: string,
+  id: number = 1
+): Promise<any> {
+  const request = {
+    jsonrpc: '2.0',
+    id: id,
+    method: 'p2p_getFile',
+    params: [peer_id, cid, download_path]
+  }
+
+  const response = await fetch(`http://localhost:${PORT}/rpc`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(request)
+  })
+
+  const data = await response.json()
+
+  if (data.error) {
+    throw new Error('Error downloading a file: ', data.error)
+  }
+
+  return data.result
+}
+
+export async function pauseDownload(session_id: number, id: number = 1): Promise<any> {
+  const request = {
+    jsonrpc: '2.0',
+    id: id,
+    method: 'p2p_getFile',
+    params: [session_id]
+  }
+
+  const response = await fetch(`http://localhost:${PORT}/rpc`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(request)
+  })
+
+  const data = await response.json()
+
+  if (data.error) {
+    throw new Error('Error pausing download: ', data.error)
+  }
+
+  return data.result
+}
+
+export async function resumeDownload(session_id: number, id: number = 1): Promise<any> {
+  const request = {
+    jsonrpc: '2.0',
+    id: id,
+    method: 'p2p_getFile',
+    params: [session_id]
+  }
+
+  const response = await fetch(`http://localhost:${PORT}/rpc`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(request)
+  })
+
+  const data = await response.json()
+
+  if (data.error) {
+    throw new Error('Error resuming download: ', data.error)
+  }
+
+  return data.result
+}
+
+export async function getSessionInfo(session_id: number, id: number = 1): Promise<any> {
+  const request = {
+    jsonrpc: '2.0',
+    id: id,
+    method: 'p2p_getSession',
+    params: [session_id]
+  }
+
+  const response = await fetch(`http://localhost:${PORT}/rpc`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(request)
+  })
+
+  const data = await response.json()
+
+  if (data.error) {
+    throw new Error('Error getting session info : ', data.error)
   }
 
   return data.result

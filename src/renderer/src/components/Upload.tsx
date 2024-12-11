@@ -38,21 +38,13 @@ type fileType = {
 }
 
 function Upload(): JSX.Element {
-  function normalizePath(filePath: string) {
-    let isWin = platform === 'win32' ? true : false
-    if (isWin) {
-      const drive = filePath[0].toLowerCase()
-      const unixPath = filePath.replace(/^([a-zA-Z]):\\/, `/mnt/${drive}/`).replace(/\\/g, '/')
-      return unixPath
-    }
-    return filePath
-  }
-
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
-  const { user, numUploadFiles, numUploadBytes, history } = React.useContext(AppContext)
+  const { user, sysPlatform, numUploadFiles, numUploadBytes, history } =
+    React.useContext(AppContext)
 
   const [peerId] = user
+  const [platform] = sysPlatform
   const [numFiles, setNumFiles] = numUploadFiles
   const [numBytes, setNumBytes] = numUploadBytes
 
@@ -70,20 +62,24 @@ function Upload(): JSX.Element {
 
   const [loading, setLoading] = useState<boolean>(false)
 
-  const [platform, setPlatform] = useState<string>('')
+  function normalizePath(filePath: string) {
+    let isWin = platform === 'win32' ? true : false
+    if (isWin) {
+      const drive = filePath[0].toLowerCase()
+      const unixPath = filePath.replace(/^([a-zA-Z]):\\/, `/mnt/${drive}/`).replace(/\\/g, '/')
+      return unixPath
+    }
+    return filePath
+  }
 
   useEffect(() => {
-    window.electron.getPlatform().then((platform) => {
-      setPlatform(platform)
-    })
-
     const fetchData = async () => {
       try {
         const data = await getUploadedFiles()
         setUploadedFiles(data)
-        setFilesToView(() => uploadedFiles)
+        setFilesToView(data)
       } catch (error) {
-        console.error('Error fetching uploaded files:', error)
+        console.error('Error fetching uploaded files: ', error)
       }
     }
 
@@ -144,11 +140,9 @@ function Upload(): JSX.Element {
 
       let byteCount: number = 0
       let filesToAppend = filesArr.map((file) => {
-        let mb = file.size / 1e6
-        console.log('mb is ', mb)
-        byteCount += mb
+        byteCount += file.size / 1e6
         let newFile: fileType = {
-          size: mb,
+          size: file.size,
           price: 0,
           file_name: file.name,
           data_cid: '',
@@ -301,12 +295,16 @@ function Upload(): JSX.Element {
                 {getFileIcon(file.file_name)}
               </div>
               <div className="ml-2">
-                <span className="block font-semibold">{file.file_name}</span>
+                <span className="block font-semibold">
+                  {file.file_name.length > 60
+                    ? `${file.file_name.slice(0, 57)}...`
+                    : file.file_name}
+                </span>
                 <span className="block text-gray-500">{file.data_cid}</span>{' '}
               </div>
             </div>
             <span className="flex-1 text-left">
-              {file.size.toLocaleString(undefined, {
+              {(file.size / 1e6).toLocaleString(undefined, {
                 minimumFractionDigits: 0,
                 maximumFractionDigits: 6
               })}{' '}
@@ -371,11 +369,13 @@ function Upload(): JSX.Element {
                             ? `${file.file_name.slice(0, 57)}...`
                             : file.file_name}
                           <div className="absolute bottom-3 left-2 transform translate-y-full bg-gray-700 text-white text-sm rounded-lg p-2 opacity-0 group-hover:opacity-100 transition-opacity duration-100 delay-50 pointer-events-none">
-                            {file.file_name}
+                            {file.file_name.length > 60
+                              ? `${file.file_name.slice(0, 57)}...`
+                              : file.file_name}
                           </div>
                         </td>
                         <td className="px-4 py-2">
-                          {file.size.toLocaleString(undefined, {
+                          {(file.size / 1e6).toLocaleString(undefined, {
                             minimumFractionDigits: 0,
                             maximumFractionDigits: 6
                           })}

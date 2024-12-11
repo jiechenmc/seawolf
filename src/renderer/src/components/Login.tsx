@@ -26,6 +26,7 @@ function Login(): JSX.Element {
 
     try {
       const data = await loginUser(username, password)
+      console.log('login peer id ', data)
       if (data) {
         setPeerId(data)
         setLoading(false)

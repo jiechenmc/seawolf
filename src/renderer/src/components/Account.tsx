@@ -1,6 +1,7 @@
 import SideNav from './SideNav'
 import { FaRegClipboard } from 'react-icons/fa'
 import React, { useEffect, useState } from 'react'
+import { AppContext } from '@renderer/AppContext'
 
 function formatDateTime(date: Date): string {
   const padToTwoDigits = (num: number) => (num < 10 ? `0${num}` : num)
@@ -16,24 +17,6 @@ function formatDateTime(date: Date): string {
   return `${month}/${day}/${year} ${hours}:${minutes}:${seconds}`
 }
 
-const tranferMoney = async (address: string, amount: number) => {
-
-  const r = await fetch("http://localhost:8080/transfer", {
-    method: "POST",
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ account: "default", address, amount })
-  })
-
-  const data = await r.json()
-
-  if (data.status != "success")
-    return "No money"
-
-  return data.message
-}
-
 function Account(): JSX.Element {
   const handleCopyToClipboard = () => {
     navigator.clipboard
@@ -47,35 +30,35 @@ function Account(): JSX.Element {
   }
 
   const [walletBalance, setWalletBalance] = useState(0)
-  const [walletAddress, setWalletAddress] = useState("")
-  const [sentTxId, setTxId] = useState("")
+  const [walletAddress, setWalletAddress] = useState('')
+  const [sentTxId, setTxId] = useState('')
 
   const [activeTab, setActiveTab] = useState<'Wallet' | 'History' | 'Settings'>('Wallet')
 
-  useEffect(() => {
-    fetch("http://localhost:8080/balance?q=default", {
-      headers: {
-        'Content-Type': 'application/json'
-      },
-    }).then(async (r) => {
-      const data = await r.json()
-      setWalletBalance(parseInt(data))
-    })
+  // useEffect(() => {
+  //   fetch("http://localhost:8080/balance?q=default", {
+  //     headers: {
+  //       'Content-Type': 'application/json'
+  //     },
+  //   }).then(async (r) => {
+  //     const data = await r.json()
+  //     setWalletBalance(parseInt(data))
+  //   })
 
-    fetch("http://localhost:8080/account", {
-      method: "POST",
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ account: "default" })
-    }
-    ).then(async (r) => {
-      const data = await r.json()
-      setWalletAddress(data.message)
-    })
+  //   fetch("http://localhost:8080/account", {
+  //     method: "POST",
+  //     headers: {
+  //       'Content-Type': 'application/json'
+  //     },
+  //     body: JSON.stringify({ account: "default" })
+  //   }
+  //   ).then(async (r) => {
+  //     const data = await r.json()
+  //     setWalletAddress(data.message)
+  //   })
 
-    // tranferMoney("1P3JSQhXCj2iUeNb1rDzrxSNry7PukwXKJ", 1).then(d => setTxId(d))
-  }, [])
+  //   // tranferMoney("1P3JSQhXCj2iUeNb1rDzrxSNry7PukwXKJ", 1).then(d => setTxId(d))
+  // }, [])
 
   console.log(sentTxId)
 

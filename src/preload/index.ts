@@ -3,7 +3,8 @@ import { electronAPI } from '@electron-toolkit/preload'
 
 // Custom APIs for renderer
 const api = {
-  getPlatform: () => ipcRenderer.invoke('get-platform')
+  getPlatform: () => ipcRenderer.invoke('get-platform'),
+  getDownloadPath: () => ipcRenderer.invoke('get-download-path')
 }
 
 const combinedAPI = {
