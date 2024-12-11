@@ -103,8 +103,18 @@ type FileShareMeta struct {
 
 type FileShareFile struct {
     FileShareMeta
-    DataCid string                  `json:"data_cid"`
-    ProviderID string               `json:"provider_id"`
+    DataCid string          `json:"data_cid"`
+    ProviderID string       `json:"provider_id"`
+}
+
+type FileShareUpload struct {
+    Timestamp string        `json:"timestamp"`
+    FileShareFile
+}
+
+type FileShareDownload struct {
+    Timestamp string        `json:"timestamp"`
+    FileShareFile
 }
 
 type DataBuffer struct {
@@ -884,7 +894,9 @@ func (s *FileShareSession) SendWantData(peerID peer.ID, c cid.Cid) chan DataBuff
         if err != nil {
             return nil
         }
+        s.statsLock.Lock()
         s.TotalBytes = int64(size)
+        s.statsLock.Unlock()
         dataChannel := make(chan DataBuffer)
         var chunkData []byte
         go func() {
@@ -1067,12 +1079,14 @@ func (f *FileShareNode) GetFile(ctx context.Context, providerIDStr string, reqCi
 
     var bytes []byte
     var dataChannel chan DataBuffer
+    var ok bool
+    var size int64
     fileMeta := FileShareMeta{}
     //Check local file store before asking peers
     f.fstoreLock.Lock()
-    _, ok := f.fstore[reqCid]
+    _, local := f.fstore[reqCid]
     f.fstoreLock.Unlock()
-    if ok {
+    if local {
         f.mstoreLock.Lock()
         fileMeta, ok = f.mstore[reqCid]
         f.mstoreLock.Unlock()
@@ -1080,11 +1094,14 @@ func (f *FileShareNode) GetFile(ctx context.Context, providerIDStr string, reqCi
             log.Printf("Failed to find metadata for our own uploaded file")
             return -1, internalError
         }
-        dataChannel, _, err = readFile(fileShareUploadsDirectory + "/" + fileMeta.Name)
+        dataChannel, size, err = readFile(fileShareUploadsDirectory + "/" + fileMeta.Name)
         if err != nil {
             log.Printf("Failed to get file.\n")
             return -1, internalError
         }
+        session.statsLock.Lock()
+        session.TotalBytes = size
+        session.statsLock.Unlock()
     } else {
         bytes = session.SendWantMeta(providerID, reqCid)
         if bytes == nil {
@@ -1132,6 +1149,11 @@ func (f *FileShareNode) GetFile(ctx context.Context, providerIDStr string, reqCi
                 goto Failed
             }
             bytesWritten += int64(len(buf.data))
+            if local {
+                session.statsLock.Lock()
+                session.RxBytes = bytesWritten
+                session.statsLock.Unlock()
+            }
         }
         file.Close()
         //Compute hash to verify integrity of file
@@ -1155,7 +1177,8 @@ func (f *FileShareNode) GetFile(ctx context.Context, providerIDStr string, reqCi
             goto Failed
         }
 
-        dbAddDownload(nil, f.host.ID().String(), providerIDStr, reqCidStr, fileMeta.Name, fileMeta.Price, fileMeta.Size)
+        dbAddDownload(nil, f.host.ID().String(), providerIDStr, reqCidStr, fileMeta.Name, fileMeta.Price,
+                      fileMeta.Size, time.Now().UTC().Format(time.RFC3339))
 
         f.SessionCleanup(session, 0)
 Failed:
@@ -1209,7 +1232,7 @@ func (f *FileShareNode) PutFile(ctx context.Context, inputFile string, price flo
         return cid.Cid{}, internalError
     }
     // Record file into database
-    err = dbAddUpload(nil, f.host.ID().String(), dataCid.String(), filename, price, bytesRead)
+    err = dbAddUpload(nil, f.host.ID().String(), dataCid.String(), filename, price, bytesRead, time.Now().UTC().Format(time.RFC3339))
     if err != nil {
         log.Printf("Failed to record file into database. %v\n", err)
         return cid.Cid{}, internalError
@@ -1418,26 +1441,28 @@ func fileShareFindProviders(ctx context.Context, kadDHT *dht.IpfsDHT, requestCid
 }
 
 
-func (f *FileShareNode) GetUploads() ([]FileShareFile, error) {
+func (f *FileShareNode) GetUploads() ([]FileShareUpload, error) {
+    uploads, err := dbGetUploads(nil, f.host.ID().String())
+    if err != nil {
+        return nil, err
+    }
     f.fstoreLock.Lock()
-    files := make([]FileShareFile, 0, len(f.fstore))
-    for cid, _ := range f.fstore {
-        f.mstoreLock.Lock()
-        fileMetadata, ok := f.mstore[cid]
-        f.mstoreLock.Unlock()
+    files := make([]FileShareUpload, 0, len(f.fstore))
+    for _, upload := range uploads {
+        dataCid, err := cid.Decode(upload.DataCid)
+        if err != nil {
+            continue
+        }
+        _, ok := f.fstore[dataCid]
         if ok {
-            files = append(files, FileShareFile {
-                fileMetadata,
-                cid.String(),
-                f.host.ID().String(),
-            })
+            files = append(files, upload)
         }
     }
     f.fstoreLock.Unlock()
     return files, nil
 }
 
-func (f *FileShareNode) GetDownloads() ([]FileShareFile, error) {
+func (f *FileShareNode) GetDownloads() ([]FileShareDownload, error) {
     return dbGetDownloads(nil, f.host.ID().String())
 }
 

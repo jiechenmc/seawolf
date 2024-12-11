@@ -275,7 +275,7 @@ func (s *P2PService) DeleteFile(cid string) error {
 	return s.fsNode.DeleteFile(cid)
 }
 
-func (s *P2PService) GetUploads() ([]FileShareFile, error) {
+func (s *P2PService) GetUploads() ([]FileShareUpload, error) {
 	if s.username == nil || s.fsNode == nil {
 		log.Printf("Attempted to get uploads when not logged in\n")
 		return nil, notLoggedIn
@@ -283,7 +283,7 @@ func (s *P2PService) GetUploads() ([]FileShareFile, error) {
 	return s.fsNode.GetUploads()
 }
 
-func (s *P2PService) GetDownloads() ([]FileShareFile, error) {
+func (s *P2PService) GetDownloads() ([]FileShareDownload, error) {
 	if s.username == nil || s.fsNode == nil {
 		log.Printf("Attempted to get downloads when not logged in\n")
 		return nil, notLoggedIn

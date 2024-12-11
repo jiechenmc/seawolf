@@ -229,6 +229,7 @@ None
 #### Returns
 ```
 [{
+    "timestamp":    string  - ISO-8601 string of when upload was complete
     "size":         int     - size of file in bytes
     "price":        int     - price of the file
     "file_name":    string  - name of file
@@ -248,6 +249,7 @@ None
 #### Returns
 ```
 [{
+    "timestamp":    string  - ISO-8601 string of when download was complete
     "size":         int     - size of file in bytes
     "price":        int     - price of the file
     "file_name":    string  - name of file
