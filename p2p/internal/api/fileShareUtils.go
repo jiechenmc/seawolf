@@ -66,6 +66,7 @@ type FileShareSession struct {
     SessionID int                   `json:"session_id"`
     ReqCid string                   `json:"req_cid"`
     RxBytes int64                   `json:"rx_bytes"`
+    TotalBytes int64                `json:"total_bytes"`
     Complete bool                   `json:"is_complete"`
     Result int                      `json:"result"`
     Pausable
@@ -861,6 +862,7 @@ func (s *FileShareSession) SendWantData(peerID peer.ID, c cid.Cid) chan DataBuff
         if err != nil {
             return nil
         }
+        s.TotalBytes = int64(size)
         dataChannel := make(chan DataBuffer)
         var chunkData []byte
         go func() {

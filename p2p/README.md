@@ -186,6 +186,7 @@ SessionID: int - session ID of the requested session
     "session_id":  int    - session ID
     "req_cid":     string - CID of downloaded file
     "rx_bytes":    int    - bytes downloaded
+    "total_bytes": int    - size of file in bytes
     "paused":      int    - non-zero indicates paused
     "is_complete": bool   - whether session is complete
     "result":      int    - status code of complete session. Non-zero indicates error
