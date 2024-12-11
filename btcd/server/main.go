@@ -147,7 +147,7 @@ func main() {
 	defer stop()
 
 	spawnBtcd(ctx)
-	spawnWallet(ctx, "7b7c9fade5188ba23147fe16f03fa3426dbdfe5c5af0cb2512fea300f24f682e")
+	spawnWallet(ctx, os.Getenv("WALLET_SEED"))
 
 	ntfnHandlers := rpcclient.NotificationHandlers{}
 
@@ -192,6 +192,7 @@ func main() {
 	http.HandleFunc("/transfer", app.TransferHandler)
 	// http.HandleFunc("/account", app.AccountHandler)
 	http.HandleFunc("/transactions", app.TransactionHandler)
+	// http.HandleFunc("/history", app.HistoryHandler)
 
 	fmt.Println("Server is listening on port 8080...")
 	err = http.ListenAndServe(":8080", nil) // Start the HTTP server on port 8080

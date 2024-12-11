@@ -116,3 +116,16 @@ func (app *App) TransactionHandler(w http.ResponseWriter, r *http.Request) {
 		WriteSuccessResponse(w, strconv.Itoa(int(txs.Confirmations)))
 	}
 }
+
+// func (app *App) HistoryHandler(w http.ResponseWriter, r *http.Request) {
+
+// 	fmt.Printf("/history\n")
+
+// 	txs, err := ListTransactionHistory(app.RpcClient, "default")
+
+// 	if err != nil {
+// 		WriteErrorResponse(w, err)
+// 	} else {
+// 		WriteSuccessResponse(w, strconv.Itoa(len(txs)))
+// 	}
+// }
