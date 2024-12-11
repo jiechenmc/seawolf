@@ -590,8 +590,12 @@ func (f *FileShareNode) SessionCleanup(session *FileShareSession, result int) {
 
     session.streamLock.Lock()
     for peerID, stream := range session.streamMap {
+        reqLock := session.GetRequestLock(peerID)
+        reqLock.Lock()
+        stream.SendString("CLOSE\n")
         stream.Close()
         delete(session.streamMap, peerID)
+        reqLock.Unlock()
     }
     session.streamLock.Unlock()
 }
@@ -1020,7 +1024,6 @@ func (s *FileShareSession) SendWantWallet(peerID peer.ID) string {
 
     return ""
 }
-
 
 func (f *FileShareNode) GetFile(ctx context.Context, providerIDStr string, reqCidStr string, outputFile string) (int, error) {
     reqCid, err := cid.Decode(reqCidStr)
