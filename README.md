@@ -7,7 +7,7 @@
 $ npm install && npm run dev
 ```
 
-The following steps assume you have `Go` and `Docker` installed on your system and that you are at the root of the project. 
+The following steps assume you are on a `Linux/Unix` like system and you have `Go` and `Docker` installed and that you are at the root of the project. 
 
 Please see https://go.dev/doc/install to install `Go` and https://docs.docker.com/engine/install/ to install `Docker`.
 
