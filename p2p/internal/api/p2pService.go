@@ -180,7 +180,7 @@ func (s *P2PService) Login(username string, password string) (string, error) {
 
 	s.fsNode = FileShareNodeCreate(*s.p2pHost, s.kadDHT, walletAddress)
 	s.chatNode = ChatNodeCreate(*s.p2pHost, s.kadDHT, s.fsNode)
-	s.proxyNode = ProxyNodeCreate(*s.p2pHost, s.kadDHT)
+	s.proxyNode = ProxyNodeCreate(*s.p2pHost, s.kadDHT, false)
 	return (*s.p2pHost).ID().String(), nil
 }
 

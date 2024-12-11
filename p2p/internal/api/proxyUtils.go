@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"sync"
@@ -17,8 +16,8 @@ import (
 )
 
 const proxyProtocol = "/orcanet/p2p/seawolf/proxy"
-const proxyRequestTimeout = time.Second * 10
-const tcpPort = ":8082"
+const proxyRequestTimeout = time.Second * 5
+const tcpPort = ":8083"
 
 type ProxyStatus struct {
 	PeerID  string `json:"peer_id"`
@@ -30,18 +29,19 @@ type ProxyNode struct {
 	kadDHT    *dht.IpfsDHT
 	proxies   map[peer.ID]bool
 	proxyLock sync.Mutex
+	connected bool
+	stream    *P2PStream
 }
 
 func ProxyNodeCreate(hostNode host.Host, kadDHT *dht.IpfsDHT, isProxy bool) *ProxyNode {
 	pn := &ProxyNode{
-		host:    hostNode,
-		kadDHT:  kadDHT,
-		proxies: make(map[peer.ID]bool),
+		host:      hostNode,
+		kadDHT:    kadDHT,
+		proxies:   make(map[peer.ID]bool),
+		connected: false,
+		stream:    nil,
 	}
 	hostNode.SetStreamHandler(proxyProtocol, pn.proxyStreamHandler)
-	if isProxy {
-		go pn.startProxyListener()
-	}
 	return pn
 }
 
@@ -53,36 +53,62 @@ func (pn *ProxyNode) startTCPListener() {
 	defer listener.Close()
 
 	for {
-		conn, err := listener.Accept()
-		if err != nil {
-			log.Printf("Failed to accept connection: %v", err)
-			continue
-		}
-		go pn.handleTCPConnection(conn)
+		// conn, err := listener.Accept()
+		// if err != nil {
+		// 	log.Printf("Failed to accept connection: %v", err)
+		// 	continue
+		// }
+		// go pn.handleTCPConnection(conn, proxyPeerID)
 	}
 }
 
-func (pn *ProxyNode) handleTCPConnection(conn net.Conn) {
+func (pn *ProxyNode) handleTCPConnection(conn net.Conn, proxyPeerID peer.ID) error {
 	defer conn.Close()
 
-	// Select a proxy peer to connect to
-	proxyPeerID, err := pn.selectProxyPeer()
-	if err != nil {
-		log.Printf("Failed to select proxy peer: %v", err)
-		return
+	// check if proxyPeerID is a valid proxy
+	if !pn.IsProxy(proxyPeerID) {
+		return fmt.Errorf("peer is not a valid proxy")
 	}
 
 	// Establish a libp2p stream to the proxy
-	stream, err := pn.host.NewStream(context.Background(), proxyPeerID, proxyProtocol)
+	stream, err := p2pOpenStream(context.Background(), proxyProtocol, pn.host, pn.kadDHT, proxyPeerID.String())
 	if err != nil {
 		log.Printf("Failed to create libp2p stream: %v", err)
-		return
+		return err
 	}
-	defer stream.Close()
+
+	err = stream.SendString("REQUEST\n")
+	if err != nil {
+		defer stream.Close()
+		return err
+	}
+
+	str, err := stream.ReadString('\n', proxyRequestTimeout)
+	if err != nil {
+		defer stream.Close()
+		return err
+	}
+
+	if str != "ACCEPT\n" {
+		defer stream.Close()
+		return fmt.Errorf("proxy rejected connection")
+	}
+
+	// FIXME get wallet address & price per byte from proxy
+
+	pn.proxyLock.Lock()
+	defer pn.proxyLock.Unlock()
+	if pn.connected {
+		defer stream.Close()
+		return fmt.Errorf("Already connected to a proxy")
+	}
+	pn.stream = stream
+	pn.connected = true
 
 	// Forward traffic between the TCP connection and the libp2p stream
-	go io.Copy(stream, conn)
-	io.Copy(conn, stream)
+	// go io.Copy(stream, conn)
+	// io.Copy(conn, stream)
+	return nil
 }
 
 func (pn *ProxyNode) selectProxyPeer() (peer.ID, error) {
@@ -95,6 +121,14 @@ func (pn *ProxyNode) selectProxyPeer() (peer.ID, error) {
 		}
 	}
 	return "", fmt.Errorf("no available proxy peers")
+}
+
+func (pn *ProxyNode) IsProxy(peerID peer.ID) bool {
+	pn.proxyLock.Lock()
+	defer pn.proxyLock.Unlock()
+
+	isProxy, ok := pn.proxies[peerID]
+	return ok && isProxy
 }
 
 func (pn *ProxyNode) proxyStreamHandler(s network.Stream) {
