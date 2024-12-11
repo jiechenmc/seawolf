@@ -109,7 +109,7 @@ func (app *App) TransactionHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	fmt.Printf("/transaction: %+v\n", data)
 
-	txs, err := ListTransaction(app.RpcClient, data.TxID)
+	txs, err := GetTransaction(app.RpcClient, data.TxID)
 	if err != nil {
 		WriteErrorResponse(w, err)
 	} else {

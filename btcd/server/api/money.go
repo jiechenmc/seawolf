@@ -37,7 +37,7 @@ func CreateAccount(client *rpcclient.Client, accountName string, passphrase stri
 	return err
 }
 
-func ListTransaction(client *rpcclient.Client, txId string) (*btcjson.GetTransactionResult, error) {
+func GetTransaction(client *rpcclient.Client, txId string) (*btcjson.GetTransactionResult, error) {
 	hash, err := chainhash.NewHashFromStr(txId)
 	if err != nil {
 		fmt.Println("ERR")
@@ -75,7 +75,6 @@ func SendToAddress(client *rpcclient.Client, fromAccount string, addressStr stri
 		return nil, err
 	}
 
-	// TODO: change this when we start to connect to the TA's network
 	address, err := btcutil.DecodeAddress(addressStr, &chaincfg.MainNetParams)
 
 	if err != nil {
