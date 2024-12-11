@@ -190,7 +190,8 @@ func main() {
 
 	http.HandleFunc("/balance", app.BalanceHandler)
 	http.HandleFunc("/transfer", app.TransferHandler)
-	http.HandleFunc("/account", app.AccountHandler)
+	// http.HandleFunc("/account", app.AccountHandler)
+	http.HandleFunc("/transactions", app.TransactionHandler)
 
 	fmt.Println("Server is listening on port 8080...")
 	err = http.ListenAndServe(":8080", nil) // Start the HTTP server on port 8080

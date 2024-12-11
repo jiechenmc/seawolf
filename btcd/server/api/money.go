@@ -1,6 +1,9 @@
 package api
 
 import (
+	"fmt"
+
+	"github.com/btcsuite/btcd/btcjson"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -34,6 +37,15 @@ func CreateAccount(client *rpcclient.Client, accountName string, passphrase stri
 	return err
 }
 
+func ListTransaction(client *rpcclient.Client, txId string) (*btcjson.GetTransactionResult, error) {
+	hash, err := chainhash.NewHashFromStr(txId)
+	if err != nil {
+		fmt.Println("ERR")
+		return nil, err
+	}
+	return client.GetTransaction(hash)
+}
+
 func GetAddressesByAccount(client *rpcclient.Client, account string) ([]btcutil.Address, error) {
 	return client.GetAddressesByAccount(account)
 }
@@ -64,7 +76,7 @@ func SendToAddress(client *rpcclient.Client, fromAccount string, addressStr stri
 	}
 
 	// TODO: change this when we start to connect to the TA's network
-	address, err := btcutil.DecodeAddress(addressStr, &chaincfg.SimNetParams)
+	address, err := btcutil.DecodeAddress(addressStr, &chaincfg.MainNetParams)
 
 	if err != nil {
 		// log.Fatalf("Failed to decode address: %v", err)

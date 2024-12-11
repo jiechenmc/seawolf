@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 
 	"github.com/btcsuite/btcd/rpcclient"
 )
@@ -22,6 +23,10 @@ type TransferRequestData struct {
 
 type AccountRequestData struct {
 	Account string `json:"account"`
+}
+
+type TransactionRequestData struct {
+	TxID string `json:"txid"`
 }
 
 func WriteSuccessResponse(w http.ResponseWriter, message string) {
@@ -90,5 +95,24 @@ func (app *App) AccountHandler(w http.ResponseWriter, r *http.Request) {
 		WriteErrorResponse(w, err)
 	} else {
 		WriteSuccessResponse(w, "account created")
+	}
+}
+
+func (app *App) TransactionHandler(w http.ResponseWriter, r *http.Request) {
+
+	var data TransactionRequestData
+
+	err := json.NewDecoder(r.Body).Decode(&data)
+	if err != nil {
+		http.Error(w, "Bad request: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	fmt.Printf("/transaction: %+v\n", data)
+
+	txs, err := ListTransaction(app.RpcClient, data.TxID)
+	if err != nil {
+		WriteErrorResponse(w, err)
+	} else {
+		WriteSuccessResponse(w, strconv.Itoa(int(txs.Confirmations)))
 	}
 }
