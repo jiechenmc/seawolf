@@ -24,5 +24,5 @@ $ ./bootstrap.sh
 ### Running p2p Backend
 
 ```bash
-$ ./p2p/seawolf
+$ ./p2p/seawolf_p2p
 ```
