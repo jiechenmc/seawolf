@@ -19,6 +19,8 @@ const proxyRequestTimeout = time.Second * 10
 type ProxyStatus struct {
 	PeerID  string `json:"peer_id"`
 	IsProxy bool   `json:"is_proxy"`
+	// IP string `json:"ip"`
+	// Port string `json:"port"`
 }
 
 type ProxyNode struct {
