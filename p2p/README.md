@@ -114,10 +114,11 @@ None
     "data_cid":             string  - cid of file
     "providers": [
         {
-            "peer_id":      string  - peer id of provider
-            "price":        int     - price of the file
-            "metadata_cid": string  - cid of metadata
-            "file_name":    string  - name of file
+            "peer_id":          string  - peer id of provider
+            "price":            int     - price of the file
+            "metadata_cid":     string  - cid of metadata
+            "file_name":        string  - name of file
+            "wallet_address":   string  - wallet address of provider
         },
         ...
     ]
@@ -138,10 +139,11 @@ CID: string - data CID or metadata CID
     "data_cid":             string  - cid of file
     "providers": [
         {
-            "peer_id":      string  - peer id of provider
-            "price":        int     - price of the file
-            "metadata_cid": string  - cid of metadata
-            "file_name":    string  - name of file
+            "peer_id":          string  - peer id of provider
+            "price":            int     - price of the file
+            "metadata_cid":     string  - cid of metadata
+            "file_name":        string  - name of file
+            "wallet_address":   string  - wallet address of provider
         },
         ...
     ]
