@@ -367,10 +367,10 @@ func (s *P2PService) GetChat(peerID string, chatID int) (*ChatRoom, error) {
 		log.Printf("Attempted to get chat when not logged in\n")
 		return nil, notLoggedIn
 	}
-	return s.chatNode.GetChat(peerID, chatID)
+	return s.chatNode.GetChat(peerID, chatID, true)
 }
 
-func (s *P2PService) GetChats() ([]*ChatRoom, error) {
+func (s *P2PService) GetChats() ([]ChatRoom, error) {
 	if s.username == nil || s.chatNode == nil {
 		log.Printf("Attempted to get chats when not logged in\n")
 		return nil, notLoggedIn

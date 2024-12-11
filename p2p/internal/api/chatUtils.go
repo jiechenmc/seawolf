@@ -66,6 +66,7 @@ type ChatNode struct {
     kadDHT *dht.IpfsDHT
     fsNode *FileShareNode
     chats map[peer.ID]map[int]*ChatRoom
+    chatsLock sync.Mutex
     outgoingRequests map[int]*ChatRequest
     outgoingRequestsLock sync.Mutex
     incomingRequests map[peer.ID]map[int]*ChatRequest
@@ -284,6 +285,7 @@ declined:
 
 */
 func (chatRoom *ChatRoom) handleMessage() error {
+    // No need to lock for read because only one thread should be calling read on stream
     text, err := chatRoom.stream.ReadString('\n', chatRequestTimeout)
     if err != nil {
         return err
@@ -293,7 +295,9 @@ func (chatRoom *ChatRoom) handleMessage() error {
         From: chatRoom.stream.RemotePeerID,
         Text: text[:len(text) - 1],
     }
+    chatRoom.chatLock.Lock()
     chatRoom.Messages = append(chatRoom.Messages, message)
+    chatRoom.chatLock.Unlock()
     return nil
 }
 
@@ -303,21 +307,23 @@ func (cn *ChatNode) SendMessage(remotePeerIDStr string, chatID int, text string)
         log.Printf("Failed to decode remote peer ID string '%v'. %v\n", remotePeerIDStr, err)
         return nil, invalidParams
     }
+    cn.chatsLock.Lock()
     peerChats, ok := cn.chats[remotePeerID]
     if !ok {
+        cn.chatsLock.Unlock()
         return nil, chatNotFound
     }
     chat, ok := peerChats[chatID]
+    cn.chatsLock.Unlock()
     if !ok {
         return nil, chatNotFound
     }
 
     chat.chatLock.Lock()
+    defer chat.chatLock.Unlock()
     if chat.Status != ONGOING {
-        chat.chatLock.Unlock()
         return nil, chatNotOngoing
     }
-    chat.chatLock.Unlock()
 
     var builder strings.Builder
     builder.WriteString(fmt.Sprintf("MESSAGE\n%s\n", text))
@@ -337,7 +343,7 @@ func (cn *ChatNode) SendMessage(remotePeerIDStr string, chatID int, text string)
 }
 
 func (cn *ChatNode) CloseChat(remotePeerIDStr string, chatID int) (*ChatRoom, error) {
-    chat, err := cn.GetChat(remotePeerIDStr, chatID)
+    chat, err := cn.GetChat(remotePeerIDStr, chatID, false)
     if err != nil {
         return nil, err
     }
@@ -358,35 +364,46 @@ func (cn *ChatNode) CloseChat(remotePeerIDStr string, chatID int) (*ChatRoom, er
 }
 
 func (cn *ChatNode) GetMessages(remotePeerIDStr string, chatID int) ([]Message, error) {
-    chat, err := cn.GetChat(remotePeerIDStr, chatID)
+    chat, err := cn.GetChat(remotePeerIDStr, chatID, false)
     if err != nil {
         return nil, err
     }
     return chat.Messages, nil
 }
 
-func (cn *ChatNode) GetChat(remotePeerIDStr string, chatID int) (*ChatRoom, error) {
+func (cn *ChatNode) GetChat(remotePeerIDStr string, chatID int, makeCopy bool) (*ChatRoom, error) {
     remotePeerID, err := peer.Decode(remotePeerIDStr)
     if err != nil {
         log.Printf("Failed to decode remote peer ID string '%v'. %v\n", remotePeerIDStr, err)
         return nil, invalidParams
     }
+    cn.chatsLock.Lock()
     peerChats, ok := cn.chats[remotePeerID]
     if !ok {
+        cn.chatsLock.Unlock()
         return nil, chatNotFound
     }
     chat, ok := peerChats[chatID]
+    cn.chatsLock.Unlock()
     if !ok {
         return nil, chatNotFound
+    }
+    if makeCopy {
+        chat.chatLock.Lock()
+        chatCpy := *chat
+        chat.chatLock.Unlock()
+        chat = &chatCpy
     }
     return chat, nil
 }
 
-func (cn *ChatNode) GetChats() []*ChatRoom {
-    chats := []*ChatRoom{}
+func (cn *ChatNode) GetChats() []ChatRoom {
+    chats := []ChatRoom{}
     for _, peerChats := range cn.chats {
         for _, chat := range peerChats {
-            chats = append(chats, chat)
+            chat.chatLock.Lock()
+            chats = append(chats, *chat)
+            chat.chatLock.Unlock()
         }
     }
     return chats
@@ -403,12 +420,14 @@ func (cn *ChatNode) CreateChatRoom(id int, buyer peer.ID, seller peer.ID, fileCi
         Status: ONGOING,
         stream: p2pStream,
     }
+    cn.chatsLock.Lock()
     peerChats, ok := cn.chats[p2pStream.RemotePeerID]
     if !ok {
         peerChats = make(map[int]*ChatRoom)
         cn.chats[p2pStream.RemotePeerID] = peerChats
     }
     peerChats[id] = chatRoom
+    cn.chatsLock.Unlock()
 
     go chatRoom.StreamHandler()
 
