@@ -21,6 +21,7 @@ type P2PService struct {
     kadDHT *dht.IpfsDHT
     fsNode *FileShareNode
     chatNode *ChatNode
+    walletAddress string
 }
 
 func (s *P2PService) ConnectToPeer(peerID string) (string, error) {
@@ -118,9 +119,10 @@ func (s *P2PService) Login( username string, password string) (string, error) {
     var privateKeyCiphertext []byte
     var privateKeyIV []byte
     var privateKeySalt []byte
+    var walletAddress string
 
     //Get user info from database
-    count, err := dbGetUser(db, username, &passwordHash, &privateKeyCiphertext, &privateKeyIV, &privateKeySalt)
+    count, err := dbGetUser(db, username, &passwordHash, &privateKeyCiphertext, &privateKeyIV, &privateKeySalt, &walletAddress)
     if err != nil {
         return "", err
     }
@@ -175,7 +177,7 @@ func (s *P2PService) Login( username string, password string) (string, error) {
 
     p2pSetupStreamHandlers(*s.p2pHost, s.kadDHT);
 
-    s.fsNode = FileShareNodeCreate(*s.p2pHost, s.kadDHT)
+    s.fsNode = FileShareNodeCreate(*s.p2pHost, s.kadDHT, walletAddress)
     s.chatNode = ChatNodeCreate(*s.p2pHost, s.kadDHT, s.fsNode)
 
     return (*s.p2pHost).ID().String(), nil
@@ -207,7 +209,7 @@ func (s *P2PService) Register(username string, password string, seed string) (st
     defer db.Close()
 
     //Query for username(return error if username already exists)
-    count, err := dbGetUser(db, username, nil, nil, nil, nil)
+    count, err := dbGetUser(db, username, nil, nil, nil, nil, nil)
     if count == 1 {
         return "", errors.New("Username already exists")
     }
@@ -235,39 +237,6 @@ func (s *P2PService) Register(username string, password string, seed string) (st
 
     log.Printf("Successfully registered user '%v'\n", username)
     return "success", nil
-}
-
-func (s *P2PService) AddWallet(password string, rpcUsername string, rpcPassword string) (string, error) {
-    if s.username == nil {
-        log.Printf("Attempted to add wallet when not logged in\n")
-        return "", notLoggedIn
-    }
-    db, err := dbOpen()
-    if err != nil {
-        return "", err
-    }
-    defer db.Close()
-
-
-    var passwordHash []byte
-    //Get user info from database
-    count, err := dbGetUser(db, *s.username, &passwordHash, nil, nil, nil)
-    if err != nil {
-        return "", err
-    }
-    if count == 0 {
-        log.Printf("Unable to find user '%v' in database\n", *s.username)
-        return "", internalError
-    }
-
-    //Ensure password matches currently logged in user's password
-    passwordBytes := []byte(password)
-    if !cipherCompareHashAndPassword(passwordHash, passwordBytes) {
-        log.Printf("Attempt to add wallet to user '%v' failed\n", *s.username)
-        return "", invalidCredentials
-    }
-    return "", nil
-    //Query local btcwallet daemon to ensure rpcUsername and rpcPassword are valid
 }
 
 func (s *P2PService) PutFile(inputFile string, price float64) (string, error) {
@@ -472,4 +441,15 @@ func (s *P2PService) CloseChat(peerID string, chatID int) (*ChatRoom, error) {
     return s.chatNode.CloseChat(peerID, chatID)
 }
 
-
+func (s *P2PService) SetWalletAddress(walletAddress string) error {
+    if s.username == nil || s.chatNode == nil {
+        log.Printf("Attempted to set wallet address when not logged in\n")
+        return notLoggedIn
+    }
+    err := dbSetWalletAddress(nil, *s.username, walletAddress)
+    if err != nil {
+        return err
+    }
+    s.fsNode.SetWalletAddress(walletAddress)
+    return nil
+}

@@ -43,10 +43,12 @@ type FileShareNode struct {
     mstore map[cid.Cid]FileShareMeta
     sessionStore map[int]*FileShareSession
     rSessionStore map[peer.ID]map[int]*FileShareRemoteSession
+    walletAddress string
     fstoreLock sync.Mutex
     mstoreLock sync.Mutex
     sessionStoreLock sync.Mutex
     rSessionStoreLock sync.Mutex
+    walletLock sync.Mutex
 }
 
 type Pausable struct {
@@ -90,6 +92,7 @@ type FileShareProvider struct {
     PeerID peer.ID          `json:"peer_id"`
     Price float64           `json:"price"`
     Name string             `json:"file_name"`
+    WalletAddress string    `json:"wallet_address"`
 }
 
 type FileShareMeta struct {
@@ -187,7 +190,7 @@ func (p *Pausable) Wait() {
     }
 }
 
-func FileShareNodeCreate(node host.Host, kadDHT *dht.IpfsDHT) *FileShareNode {
+func FileShareNodeCreate(node host.Host, kadDHT *dht.IpfsDHT, walletAddress string) *FileShareNode {
     fsNode := &FileShareNode{
         host: node,
         kadDHT: kadDHT,
@@ -195,10 +198,12 @@ func FileShareNodeCreate(node host.Host, kadDHT *dht.IpfsDHT) *FileShareNode {
         mstore: make(map[cid.Cid]FileShareMeta),
         sessionStore: make(map[int]*FileShareSession),
         rSessionStore: make(map[peer.ID]map[int]*FileShareRemoteSession),
+        walletAddress: walletAddress,
         mstoreLock: sync.Mutex{},
         fstoreLock: sync.Mutex{},
         sessionStoreLock: sync.Mutex{},
         rSessionStoreLock: sync.Mutex{},
+        walletLock: sync.Mutex{},
     }
 
     node.SetStreamHandler(fileShareProtocol, fsNode.fileShareStreamHandler)
@@ -207,18 +212,27 @@ func FileShareNodeCreate(node host.Host, kadDHT *dht.IpfsDHT) *FileShareNode {
     files, err := dbGetUploads(nil, node.ID().String())
     if err == nil {
         for _, file := range files {
-            cid, err := cid.Decode(file.DataCid)
+            _, err := cid.Decode(file.DataCid)
             if err != nil {
                 // Remove corrupted entry with invalid cid
                 dbRemoveUpload(nil, node.ID().String(), file.DataCid)
                 continue
             }
 
-            diskCid, err := fsNode.PutFile(context.Background(), fileShareUploadsDirectory + "/" + file.Name, file.Price)
-            if err != nil || cid != diskCid {
-                // Remove corrupted entry with invalid cid or file
-                dbRemoveUpload(nil, node.ID().String(), file.DataCid)
+            // Check whether file exists
+            absPath, err := filepath.Abs(fileShareUploadsDirectory + "/" + file.Name)
+            if err != nil {
+                continue // This case shouldn't happen
             }
+            f, err := os.Open(absPath)
+            if err != nil {
+                // Can't open file, remove from database
+                dbRemoveUpload(nil, node.ID().String(), file.DataCid)
+                continue
+            }
+            f.Close()
+
+            fsNode.PutFile(context.Background(), fileShareUploadsDirectory + "/" + file.Name, file.Price)
         }
     }
 
@@ -262,6 +276,11 @@ func (f *FileShareNode) fileShareStreamHandler(s network.Stream) {
                 }
             case "DISCOVER\n":
                 err = f.handleDiscover(stream)
+                if err != nil {
+                    return
+                }
+            case "WANT WALLET\n":
+                err = f.handleWantWallet(stream)
                 if err != nil {
                     return
                 }
@@ -518,6 +537,20 @@ func (f *FileShareNode) handleDiscover(stream *P2PStream) error {
     err = stream.SendString(builder.String())
     return err
 }
+
+//Request:  "WANT WALLET\n"
+//Response: "HERE\n<wallet_address>\n"
+func (f *FileShareNode) handleWantWallet(stream *P2PStream) error {
+    //Create response
+    var builder strings.Builder
+    f.walletLock.Lock()
+    walletAddress := f.walletAddress
+    f.walletLock.Unlock()
+    builder.WriteString("HERE\n" + walletAddress + "\n")
+    err := stream.SendString(builder.String())
+    return err
+}
+
 
 
 func (f *FileShareNode) SessionCreate(ctx context.Context, reqCidStr string) *FileShareSession {
@@ -960,6 +993,34 @@ func (s *FileShareSession) SendDiscover(peerID peer.ID, maxCount int) []cid.Cid 
     return nil
 }
 
+func (s *FileShareSession) SendWantWallet(peerID peer.ID) string {
+    reqLock := s.GetRequestLock(peerID)
+    reqLock.Lock()
+    defer reqLock.Unlock()
+    //Create WANT WALLET request
+    err := s.sendString(peerID, fmt.Sprintf("WANT WALLET\n"))
+    if err != nil {
+        return ""
+    }
+
+    //Wait for response
+    resp, err := s.readString(peerID, '\n', fileShareWantHaveTimeout)
+    if err != nil {
+        return ""
+    }
+
+    //We only care about HERE responses
+    if resp == "HERE\n" {
+        walletAddress, err := s.readString(peerID, '\n', fileShareWantHaveTimeout)
+        if err != nil {
+            return ""
+        }
+        return walletAddress
+    }
+
+    return ""
+}
+
 
 func (f *FileShareNode) GetFile(ctx context.Context, providerIDStr string, reqCidStr string, outputFile string) (int, error) {
     reqCid, err := cid.Decode(reqCidStr)
@@ -1281,6 +1342,7 @@ func (s *FileShareSession) DiscoverFile(ctx context.Context, reqCid cid.Cid, pro
                 return
             }
             fileMeta := FileShareMeta{}
+            var walletAddress string
             var ok bool
             //Get metadata
             if provider.ID == s.node.host.ID() {
@@ -1290,6 +1352,9 @@ func (s *FileShareSession) DiscoverFile(ctx context.Context, reqCid cid.Cid, pro
                 if !ok {
                     return
                 }
+                s.node.walletLock.Lock()
+                walletAddress = s.node.walletAddress
+                s.node.walletLock.Unlock()
             } else {
                 bytes := s.SendWantMeta(provider.ID, reqCid)
                 if bytes == nil {
@@ -1300,12 +1365,14 @@ func (s *FileShareSession) DiscoverFile(ctx context.Context, reqCid cid.Cid, pro
                     log.Printf("Error unmarshalling file metadata\n")
                     return
                 }
+                walletAddress = s.SendWantWallet(provider.ID)
             }
 
             provider := FileShareProvider{
                 PeerID: provider.ID,
                 Price: fileMeta.Price,
                 Name: fileMeta.Name,
+                WalletAddress: walletAddress,
             }
 
             lock.Lock()
@@ -1407,6 +1474,12 @@ func (f *FileShareNode) DeleteFile(dataCidStr string) error {
     os.Remove(filePath)
 
     return nil
+}
+
+func (f *FileShareNode) SetWalletAddress(walletAddress string) {
+    f.walletLock.Lock()
+    f.walletAddress = walletAddress
+    f.walletLock.Unlock()
 }
 
 

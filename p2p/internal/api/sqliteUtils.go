@@ -10,11 +10,7 @@ import (
 const databasePath = "seawolf_p2p.db"
 const createUserTableQuery = `CREATE TABLE IF NOT EXISTS users
                               (id INTEGER PRIMARY KEY, username TEXT UNIQUE, password_hash TEXT,
-                               private_key_ciphertext TEXT, private_key_iv TEXT, private_key_salt TEXT)`
-
-const createWalletTableQuery = `CREATE TABLE IF NOT EXISTS wallets
-                                    (id INTEGER PRIMARY KEY, username TEXT UNIQUE, rpc_username TEXT,
-                                     rpc_password_ciphertext TEXT, rpc_password_salt TEXT)`
+                               private_key_ciphertext TEXT, private_key_iv TEXT, private_key_salt TEXT, wallet_address TEXT)`
 
 const createUploadTableQuery = `CREATE TABLE IF NOT EXISTS uploads
                               (id INTEGER PRIMARY KEY, peer_id TEXT, cid TEXT, filename TEXT, price FLOAT, size INTEGER)`
@@ -35,14 +31,6 @@ func dbOpen() (*sql.DB, error) {
     if err != nil {
         db.Close()
         log.Printf("Failed to create user table. %v\n", err)
-        return db, internalError
-    }
-
-    //Create wallets table if doesn't exist
-    _, err = db.Exec(createWalletTableQuery)
-    if err != nil {
-        db.Close()
-        log.Printf("Failed to create wallet table. %v\n", err)
         return db, internalError
     }
 
@@ -67,7 +55,8 @@ func dbOpen() (*sql.DB, error) {
     return db, nil
 }
 
-func dbGetUser(db *sql.DB, username string, passwordHash *[]byte, privateKeyCiphertext *[]byte, privateKeyIV *[]byte, privateKeySalt *[]byte) (int, error) {
+func dbGetUser(db *sql.DB, username string, passwordHash *[]byte, privateKeyCiphertext *[]byte, 
+                privateKeyIV *[]byte, privateKeySalt *[]byte, walletAddress *string) (int, error) {
     var err error
     //Establish connection to database if doesn't exist
     if db == nil {
@@ -82,9 +71,12 @@ func dbGetUser(db *sql.DB, username string, passwordHash *[]byte, privateKeyCiph
     var privateKeyCiphertextStr string
     var privateKeySaltStr string
     var passwordHashStr string
+    var tmpWalletAddress string
 
-    err = db.QueryRow(`SELECT password_hash, private_key_ciphertext, private_key_iv, private_key_salt FROM users WHERE username= ?`, username).
-                        Scan(&passwordHashStr, &privateKeyCiphertextStr, &privateKeyIVStr, &privateKeySaltStr)
+    err = db.QueryRow(`SELECT
+                       password_hash, private_key_ciphertext, private_key_iv, private_key_salt, wallet_address 
+                       FROM users WHERE username= ?`, username).
+                       Scan(&passwordHashStr, &privateKeyCiphertextStr, &privateKeyIVStr, &privateKeySaltStr, &tmpWalletAddress)
     if err != nil {
         if err == sql.ErrNoRows {
             return 0, nil
@@ -104,6 +96,9 @@ func dbGetUser(db *sql.DB, username string, passwordHash *[]byte, privateKeyCiph
     }
     if privateKeySalt != nil {
         *privateKeySalt, err = hex.DecodeString(privateKeySaltStr)
+    }
+    if walletAddress != nil {
+        *walletAddress = tmpWalletAddress
     }
 
     if err != nil {
@@ -125,12 +120,15 @@ func dbAddUser(db *sql.DB, username string, passwordHash []byte, privateKeyCiphe
         defer db.Close()
     }
 
-    _, err = db.Exec(`INSERT INTO users (username, password_hash, private_key_ciphertext, private_key_iv, private_key_salt) VALUES (?, ?, ?, ?, ?)`,
-        username,
-        hex.EncodeToString(passwordHash),
-        hex.EncodeToString(privateKeyCiphertext),
-        hex.EncodeToString(privateKeyIV),
-        hex.EncodeToString(privateKeySalt))
+    _, err = db.Exec(`INSERT INTO users
+                     (username, password_hash, private_key_ciphertext, private_key_iv, private_key_salt, wallet_address)
+                     VALUES (?, ?, ?, ?, ?)`,
+                     username,
+                     hex.EncodeToString(passwordHash),
+                     hex.EncodeToString(privateKeyCiphertext),
+                     hex.EncodeToString(privateKeyIV),
+                     hex.EncodeToString(privateKeySalt),
+                     "")
 
     if err != nil {
         log.Printf("Failed to push user to database. %v\n", err)
@@ -372,4 +370,24 @@ func dbGetDownloads(db *sql.DB, peerID string) ([]FileShareFile, error) {
     }
 
     return files, nil
+}
+
+func dbSetWalletAddress(db *sql.DB, username string, walletAddress string) error {
+     var err error
+    //Establish connection to database if doesn't exist
+    if db == nil {
+        db, err = dbOpen()
+        if err != nil {
+            return err
+        }
+        defer db.Close()
+    }
+
+    _, err = db.Exec(`UPDATE users SET wallet_address=? WHERE username=?`, walletAddress, username)
+
+    if err != nil {
+        log.Printf("Failed to update wallet address. %v\n", err)
+        return internalError
+    }
+    return nil
 }

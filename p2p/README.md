@@ -490,3 +490,16 @@ ChatID  int     - chat ID
     ]
 }
 ```
+
+## p2p_setWalletAddress
+Sets the wallet address for the logged in user
+
+#### Parameters
+```
+WalletAddress  string  - wallet address
+```
+
+#### Returns
+```
+None
+```
