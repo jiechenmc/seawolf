@@ -1,34 +1,28 @@
 # Seawolf Exchange
 
-An Electron application with React and TypeScript
 
-## Recommended IDE Setup
-
-- [VSCode](https://code.visualstudio.com/) + [ESLint](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint) + [Prettier](https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode)
-
-## Project Setup
-
-### Install
+### Running the Electron App
 
 ```bash
-$ npm install
+$ npm install && npm run dev
 ```
 
-### Development
+The following steps assume you have `Go` and `Docker` installed on your system and that you are at the root of the project. 
+
+Please see https://go.dev/doc/install to install `Go` and https://docs.docker.com/engine/install/ to install `Docker`.
+
+### Running BTCD and BTCWALLET
+
+Set the apporiate wallet seed in `docker-compose.yml` on line `12` before continuing. An empty wallet seed will result in the creation of a brand new wallet.
 
 ```bash
-$ npm run dev
+$ ./bootstrap.sh
 ```
 
-### Build
+`bootstrap.sh` will compile p2p and create a container that will run `btcd`, `btcwallet` and another container that will run the `proxy`.
+
+### Running p2p Backend
 
 ```bash
-# For windows
-$ npm run build:win
-
-# For macOS
-$ npm run build:mac
-
-# For Linux
-$ npm run build:linux
+$ ./p2p/seawolf
 ```
