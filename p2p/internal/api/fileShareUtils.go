@@ -1015,7 +1015,7 @@ func (s *FileShareSession) SendWantWallet(peerID peer.ID) string {
         if err != nil {
             return ""
         }
-        return walletAddress
+        return walletAddress[:(len(walletAddress) - 1)] // Remove new line
     }
 
     return ""
