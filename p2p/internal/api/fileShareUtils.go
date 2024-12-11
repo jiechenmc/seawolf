@@ -17,13 +17,9 @@ import (
     "github.com/libp2p/go-libp2p/core/host"
     "github.com/libp2p/go-libp2p/core/peer"
     "github.com/libp2p/go-libp2p/core/network"
-    "github.com/ipfs/go-datastore"
     libbytes "bytes"
-    dssync "github.com/ipfs/go-datastore/sync"
     dht "github.com/libp2p/go-libp2p-kad-dht"
-    dag "github.com/ipfs/boxo/ipld/merkledag"
     cid "github.com/ipfs/go-cid"
-    blockstore "github.com/ipfs/boxo/blockstore"
 )
 
 const fileShareProtocol = "/orcanet/p2p/seawolf/fileshare"
@@ -39,13 +35,10 @@ const fileShareDownloadsDirectory = "fileshare/downloads"
 var nextSessionIDLock sync.Mutex
 var nextSessionID = 0
 var chunkSize = 256 * 1024
-var dagMaxChildren = 10
-var comboService *dag.ComboService = nil
 
 type FileShareNode struct {
     host host.Host
     kadDHT *dht.IpfsDHT
-    bstore blockstore.Blockstore
     fstore map[cid.Cid]string
     mstore map[cid.Cid]FileShareMeta
     sessionStore map[int]*FileShareSession
@@ -195,17 +188,9 @@ func (p *Pausable) Wait() {
 }
 
 func FileShareNodeCreate(node host.Host, kadDHT *dht.IpfsDHT) *FileShareNode {
-    //Create datastore
-    ds := datastore.NewMapDatastore()
-    mds := dssync.MutexWrap(ds)
-
-    //Create a blockstore
-    blkStore := blockstore.NewBlockstore(mds)
-
     fsNode := &FileShareNode{
         host: node,
         kadDHT: kadDHT,
-        bstore: blkStore,
         fstore: make(map[cid.Cid]string),
         mstore: make(map[cid.Cid]FileShareMeta),
         sessionStore: make(map[int]*FileShareSession),
@@ -1146,7 +1131,6 @@ func (f *FileShareNode) PutFile(ctx context.Context, inputFile string, price flo
     filename := filepath.Base(inputFile)
     fileMeta := FileShareMeta{ Size: bytesRead, Price: price, Name: filename }
 
-    // f.bstore.Put(ctx, node)
     f.fstoreLock.Lock()
     f.fstore[dataCid] = filename
     f.fstoreLock.Unlock()
@@ -1398,7 +1382,6 @@ func (f *FileShareNode) DeleteFile(dataCidStr string) error {
     defer f.mstoreLock.Unlock()
     _, metaOk := f.mstore[dataCid]
 
-    // f.bstore.Put(ctx, node)
     f.fstoreLock.Lock()
     defer f.fstoreLock.Unlock()
     fileName, fileOk := f.fstore[dataCid]
