@@ -188,10 +188,10 @@ func main() {
 		Passphrase: "cse416",
 	}
 
-	http.HandleFunc("/balance", app.BalanceHandler)
-	http.HandleFunc("/transfer", app.TransferHandler)
-	// http.HandleFunc("/account", app.AccountHandler)
-	http.HandleFunc("/transactions", app.TransactionHandler)
+	http.HandleFunc("/balance", corsMiddleware(app.BalanceHandler))
+	http.HandleFunc("/transfer", corsMiddleware(app.TransferHandler))
+	http.HandleFunc("/account", corsMiddleware(app.AccountHandler))
+	http.HandleFunc("/transactions", corsMiddleware(app.TransactionHandler))
 	// http.HandleFunc("/history", app.HistoryHandler)
 
 	fmt.Println("Server is listening on port 8080...")
@@ -202,4 +202,22 @@ func main() {
 	}
 	<-ctx.Done()
 	defer client.Shutdown()
+}
+
+func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Set CORS headers
+		w.Header().Set("Access-Control-Allow-Origin", "*") // Replace * with specific origin(s) if needed
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Content-Security-Policy")
+
+		// Handle preflight request
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		// Call the next handler
+		next(w, r)
+	}
 }
