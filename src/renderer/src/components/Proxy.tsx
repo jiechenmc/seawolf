@@ -25,9 +25,8 @@ function ProxyComponent(): JSX.Element {
   const [price, setPrice] = useState(0)
   const [loading, setLoading] = useState<boolean>(false)
 
-<<<<<<< Updated upstream
   useEffect(() => {
-    setLoading(true)
+    // setLoading(true)
     fetch('http://localhost:8080/account', {
       method: 'POST',
       headers: {
@@ -37,76 +36,18 @@ function ProxyComponent(): JSX.Element {
     }).then(async (r) => {
       const data = await r.json()
       setWalletAddress(data.message)
-      setLoading(false)
+      // setLoading(false)
     })
   }, [])
 
   useEffect(() => {
+    setLoading(true)
     // Fetch the list of proxies from the backend
     const fetchProxies = async (): Promise<void> => {
       try {
         const lmfao = await discoverFiles()
         if (lmfao) {
-          console.log('lmfao')
-=======
-    useEffect(() => {
-        fetch("http://localhost:8080/account", {
-            method: "POST",
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ account: "default" })
-        }
-        ).then(async (r) => {
-            const data = await r.json()
-            setWalletAddress(data.message)
-
-        })
-    }, [])
-
-
-    useEffect(() => {
-        setLoading(true)
-        // Fetch the list of proxies from the backend
-        const fetchProxies = async (): Promise<void> => {
-            try {
-                const lmfao = await discoverFiles()
-                if (lmfao) {
-                    console.log("lmfao")
-                }
-                const proxies = await getAllProxies()
-                setListOfProxies(proxies)
-            } catch (error) {
-                console.error('Failed to fetch proxies:', error)
-            }
-        }
-
-        fetchProxies()
-
-        setLoading(false)
-    }, [setListOfProxies])
-
-    const handleChooseProxy = async (proxy: Proxy): Promise<void> => {
-        if (proxy.peer_id === currProxy?.peer_id) {
-            window.alert("You are a proxy yourself and cannot connect to a proxy.")
-        } else if (!currProxy) {
-            const isConfirmed = window.confirm(
-                `Are you sure you want to connect to peer ID: ${proxy.peer_id}?`
-            )
-
-            if (isConfirmed) {
-                try {
-                    await connectToProxy(proxy.peer_id)
-                    setCurrProxy(proxy)
-                } catch (error) {
-                    console.error('Failed to connect to proxy:', error)
-                }
-            }
-            console.log(proxy)
-        }
-        else {
-            window.alert("You are already connected to a proxy.")
->>>>>>> Stashed changes
+          console.log("lmfao")
         }
         const proxies = await getAllProxies()
         setListOfProxies(proxies)
@@ -116,6 +57,8 @@ function ProxyComponent(): JSX.Element {
     }
 
     fetchProxies()
+
+    setLoading(false)
   }, [setListOfProxies])
 
   const handleChooseProxy = async (proxy: Proxy): Promise<void> => {
@@ -212,14 +155,12 @@ function ProxyComponent(): JSX.Element {
 
           <div
             onClick={handleToggle}
-            className={`${
-              serveAsProxy ? 'bg-green-500' : 'bg-gray-300'
-            } relative inline-flex h-6 w-11 items-center rounded-full cursor-pointer transition-colors`}
+            className={`${serveAsProxy ? 'bg-green-500' : 'bg-gray-300'
+              } relative inline-flex h-6 w-11 items-center rounded-full cursor-pointer transition-colors`}
           >
             <span
-              className={`${
-                serveAsProxy ? 'translate-x-6' : 'translate-x-1'
-              } inline-block w-4 h-4 transform bg-white rounded-full transition-transform`}
+              className={`${serveAsProxy ? 'translate-x-6' : 'translate-x-1'
+                } inline-block w-4 h-4 transform bg-white rounded-full transition-transform`}
             />
           </div>
         </div>
