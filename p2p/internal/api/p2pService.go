@@ -180,7 +180,7 @@ func (s *P2PService) Login(username string, password string) (string, error) {
 
 	s.fsNode = FileShareNodeCreate(*s.p2pHost, s.kadDHT, walletAddress)
 	s.chatNode = ChatNodeCreate(*s.p2pHost, s.kadDHT, s.fsNode)
-	s.proxyNode = ProxyNodeCreate(*s.p2pHost, s.kadDHT, false)
+	s.proxyNode = ProxyNodeCreate(*s.p2pHost, s.kadDHT)
 	return (*s.p2pHost).ID().String(), nil
 }
 
@@ -455,12 +455,12 @@ func (s *P2PService) SetWalletAddress(walletAddress string) error {
 	return nil
 }
 
-func (s *P2PService) RegisterAsProxy() error {
+func (s *P2PService) RegisterAsProxy(price float64, walletAddress string) error {
 	if s.username == nil || s.proxyNode == nil {
 		log.Printf("Attempted to register as proxy when not logged in\n")
 		return notLoggedIn
 	}
-	return s.proxyNode.RegisterAsProxy(context.Background())
+	return s.proxyNode.RegisterAsProxy(context.Background(), price, walletAddress)
 }
 
 func (s *P2PService) UnregisterAsProxy() error {
@@ -482,4 +482,28 @@ func (s *P2PService) ConnectToProxy(peerID string) error {
 		return invalidParams
 	}
 	return s.proxyNode.ConnectToProxy(peer_ID)
+}
+
+func (s *P2PService) DisconnectFromProxy() error {
+	if s.username == nil || s.proxyNode == nil {
+		log.Printf("Attempted to disconnect from proxy when not logged in\n")
+		return notLoggedIn
+	}
+	return s.proxyNode.DisconnectFromProxy()
+}
+
+func (s *P2PService) GetProxyBytes() (BytesTransferred, error) {
+	if s.username == nil || s.proxyNode == nil {
+		log.Printf("Attempted to get bytes when not logged in\n")
+		return BytesTransferred{}, notLoggedIn
+	}
+	return s.proxyNode.GetBytes(), nil
+}
+
+func (s *P2PService) GetAllProxies() ([]ProxyStatus, error) {
+	if s.username == nil || s.proxyNode == nil {
+		log.Printf("Attempted to get all proxies when not logged in\n")
+		return nil, notLoggedIn
+	}
+	return s.proxyNode.GetAllProxies(context.Background())
 }
