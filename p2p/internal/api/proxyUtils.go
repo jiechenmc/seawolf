@@ -40,7 +40,7 @@ type ProxyNode struct {
 }
 
 type BytesTransferred struct {
-	RxBytes int64 `json:"rx_bytes="`
+	RxBytes int64 `json:"rx_bytes"`
 	TxBytes int64 `json:"tx_bytes"`
 }
 
@@ -94,7 +94,7 @@ func (pn *ProxyNode) handleForwarding(conn net.Conn) {
 	defer stream.Close()
 	// Forward data from TCP connection to libp2p stream
 	go func() {
-		buf := make([]byte, 1024)
+		buf := make([]byte, 1024*1024)
 		for {
 			n, err := conn.Read(buf)
 			if err != nil {
@@ -114,7 +114,7 @@ func (pn *ProxyNode) handleForwarding(conn net.Conn) {
 
 	// Forward data from libp2p stream to TCP connection
 	for {
-		buf := make([]byte, 1024)
+		buf := make([]byte, 1024*1024)
 		n, err := stream.ReadBuffer(buf, time.Minute)
 		if err != nil {
 			log.Printf("Failed to read from libp2p stream: %v", err)
@@ -262,7 +262,7 @@ func (pn *ProxyNode) handleTraffic(conn net.Conn, stream *P2PStream) {
 	defer stream.Close()
 	// Forward data from TCP connection to libp2p stream
 	go func() {
-		buf := make([]byte, 1024)
+		buf := make([]byte, 1024*1024)
 		for {
 			n, err := conn.Read(buf)
 			if err != nil {
@@ -283,7 +283,7 @@ func (pn *ProxyNode) handleTraffic(conn net.Conn, stream *P2PStream) {
 
 	// Forward data from libp2p stream to TCP connection
 	for {
-		buf := make([]byte, 1024)
+		buf := make([]byte, 1024*1024)
 		n, err := stream.ReadBuffer(buf, time.Minute)
 		if err != nil {
 			log.Printf("Failed to read from libp2p stream: %v", err)
@@ -360,7 +360,8 @@ func (pn *ProxyNode) GetAllProxies(ctx context.Context) ([]ProxyStatus, error) {
 	defer pn.proxyLock.Unlock()
 	pn.proxies = make(map[peer.ID]ProxyStatus)
 	var proxies []ProxyStatus
-	for _, key := range pn.kadDHT.RoutingTable().ListPeers() {
+	peerIDs := pn.host.Peerstore().Peers()
+	for _, key := range peerIDs {
 		value, err := pn.kadDHT.GetValue(ctx, "/orcanet/proxies/"+key.String())
 		if err == nil {
 			var status ProxyStatus
