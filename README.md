@@ -26,8 +26,8 @@ $ ./bootstrap.sh
 
 ### Running p2p Backend
 
-Please rerun the command(s) below for each user and for each session. So if you reopen the electron app on the same device, you need to restart the p2p backend.
-
 ```bash
 $ ./p2p/seawolf_p2p
 ```
+
+Please rerun `./p2p/seawolf_p2p` for each user and for each session. So if you reopen the electron app on the same device, you need to restart the p2p backend. Please also delete the `seawolf_p2p.db` file if you plan on registering/logging in as the same user.
