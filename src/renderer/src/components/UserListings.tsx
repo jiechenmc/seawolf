@@ -70,7 +70,7 @@ const UserListings = () => {
   const [sortBy, setSortBy] = useState('lowest_price')
   const [showSortOptions, setShowSortOptions] = useState(false)
 
-  const [isChatOpen, setIsChatOpen] = useState(false)
+  const [isChatOpen, setIsChatOpen] = useState<boolean>(false)
   const [showChatRequests, setShowChatRequests] = useState<boolean>(false)
   const [chatRequests, setChatRequests] = useState<chatRequestType[]>([])
 
@@ -78,6 +78,7 @@ const UserListings = () => {
 
   const [loading, setLoading] = useState<boolean>(false)
 
+  console.log('chat open? ', isChatOpen)
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -111,6 +112,7 @@ const UserListings = () => {
   }
 
   const handleChatClose = () => {
+    console.log('called close')
     setIsChatOpen(false)
   }
 
@@ -382,6 +384,7 @@ const UserListings = () => {
                 <li
                   key={index}
                   className="p-4 rounded-md hover:bg-gray-200 cursor-pointer border border-gray-300"
+                  onClick={() => handleChatOpen(chatRequest)}
                 >
                   <div>
                     <p className="font-medium text-base">Peer: {chatRequest.peer_id}</p>

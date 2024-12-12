@@ -12,6 +12,7 @@ import {
   pauseDownload,
   resumeDownload
 } from '@renderer/rpcUtils'
+import { tranferMoney } from '../walletUtils'
 
 type downloadType = {
   size: number
@@ -56,7 +57,6 @@ function Download(): JSX.Element {
   const [peerId] = user
   const [downloadPath] = pathForDownload
   const [downloadingFiles, setDownloadingFiles] = filesDownloading
-  const [currProxy, setCurrProxy] = proxy
   const [walletBalance, setWalletBalance] = balance
   const [, setHistoryView] = history
 
@@ -111,10 +111,9 @@ function Download(): JSX.Element {
     try {
       const data = await discoverFile(searchHash)
       setProviders(
-        data
-        // .filter((provider: providerType) => {
-        //   provider.peer_id !== peerId
-        // })
+        data.filter((provider: providerType) => {
+          provider.peer_id !== peerId
+        })
       )
       setShowProviders(true)
     } catch (error) {
@@ -124,20 +123,48 @@ function Download(): JSX.Element {
 
   const handleProviderClick = async (provider: providerType) => {
     try {
-      let data_cid = providers?.data_cid || ''
-      const normalizedPath = downloadPath.endsWith('/') ? downloadPath : downloadPath + '/'
-      const data = await getFile(provider.peer_id, data_cid, normalizedPath + provider.file_name)
-      let newFile = {
-        size: providers?.size || 0,
-        price: provider.price,
-        file_name: provider.file_name,
-        data_cid: data_cid,
-        provider_id: provider.peer_id,
-        session_id: data,
-        download_status: 'Downloading',
-        download_progress: 0
+      let msg: string = `Name:  ${provider.file_name}\nSize:  ${providers?.size} MB\nCost:  ${provider.price} SWE`
+      if (provider.price > walletBalance) {
+        alert(`${msg}\n\nNot enough SWE. Your current balance: ${walletBalance}.`)
+      } else {
+        const confirmed = window.confirm(
+          `${msg}\n\nYou currently have ${walletBalance} SWE. Would like to proceed with the purchase?`
+        )
+        if (confirmed) {
+          let data_cid = providers?.data_cid || ''
+          const normalizedPath = downloadPath.endsWith('/') ? downloadPath : downloadPath + '/'
+          const data = await getFile(
+            provider.peer_id,
+            data_cid,
+            normalizedPath + provider.file_name
+          )
+
+          tranferMoney(provider.wallet_address, provider.price)
+          setWalletBalance((prevBalance) => prevBalance - provider.price)
+
+          let newFile = {
+            size: providers?.size || 0,
+            price: provider.price,
+            file_name: provider.file_name,
+            data_cid: data_cid,
+            provider_id: provider.peer_id,
+            session_id: data,
+            download_status: 'Downloading',
+            download_progress: 0
+          }
+          setDownloadingFiles((prevList: downloadType[]) => [...prevList, newFile])
+
+          let newHistory = {
+            date: new Date(),
+            file_name: provider.file_name,
+            file_cid: providers?.data_cid,
+            file_size: providers?.size,
+            file_cost: provider.price,
+            type: 'download'
+          }
+          setHistoryView((prevList) => [...prevList, newHistory])
+        }
       }
-      setDownloadingFiles((prevList: downloadType[]) => [...prevList, newFile])
     } catch (error) {
       console.log('Error downloading file: ', error)
     }
@@ -179,17 +206,17 @@ function Download(): JSX.Element {
     // })
   }
 
-  const handleCancelDownload = (file: downloadType, index: number) => {
-    let confirmed = window.confirm(`Are you sure want to cancel download for: ${file.file_name}`)
-    if (confirmed) {
-      // setDownloadedFiles((prevFiles) => {
-      //   setWalletBalance((prevBalance: number) => prevBalance + downloadedFile.file.cost)
-      //   const updatedFiles = [...prevFiles]
-      //   updatedFiles.splice(index, 1)
-      //   return updatedFiles
-      // })
-    }
-  }
+  // const handleCancelDownload = (file: downloadType, index: number) => {
+  //   let confirmed = window.confirm(`Are you sure want to cancel download for: ${file.file_name}`)
+  //   if (confirmed) {
+  //     // setDownloadedFiles((prevFiles) => {
+  //     //   setWalletBalance((prevBalance: number) => prevBalance + downloadedFile.file.cost)
+  //     //   const updatedFiles = [...prevFiles]
+  //     //   updatedFiles.splice(index, 1)
+  //     //   return updatedFiles
+  //     // })
+  //   }
+  // }
 
   return (
     <div className="flex ml-52">

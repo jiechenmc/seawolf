@@ -18,9 +18,18 @@ function formatDateTime(date: Date): string {
 }
 
 function Account(): JSX.Element {
+  const { balance, wallet, history } = React.useContext(AppContext)
+
+  const [historyView] = history
+  const [walletBalance] = balance
+  const [walletAddress] = wallet
+  const [sentTxId, setTxId] = useState('')
+
+  const [activeTab, setActiveTab] = useState<'Wallet' | 'History' | 'Settings'>('Wallet')
+
   const handleCopyToClipboard = () => {
     navigator.clipboard
-      .writeText('hello')
+      .writeText(walletAddress)
       .then(() => {
         console.log('copied to clipboard')
       })
@@ -29,38 +38,30 @@ function Account(): JSX.Element {
       })
   }
 
-  const [walletBalance, setWalletBalance] = useState(0)
-  const [walletAddress, setWalletAddress] = useState('')
-  const [sentTxId, setTxId] = useState('')
+  // useEffect(() => {
+  //   fetch("http://localhost:8080/balance?q=default", {
+  //     headers: {
+  //       'Content-Type': 'application/json'
+  //     },
+  //   }).then(async (r) => {
+  //     const data = await r.json()
+  //     setWalletBalance(parseInt(data))
+  //   })
 
-  const [activeTab, setActiveTab] = useState<'Wallet' | 'History' | 'Settings'>('Wallet')
+  //   fetch("http://localhost:8080/account", {
+  //     method: "POST",
+  //     headers: {
+  //       'Content-Type': 'application/json'
+  //     },
+  //     body: JSON.stringify({ account: "default" })
+  //   }
+  //   ).then(async (r) => {
+  //     const data = await r.json()
+  //     setWalletAddress(data.message)
+  //   })
 
-  useEffect(() => {
-    fetch("http://localhost:8080/balance?q=default", {
-      headers: {
-        'Content-Type': 'application/json'
-      },
-    }).then(async (r) => {
-      const data = await r.json()
-      setWalletBalance(parseInt(data))
-    })
-
-    fetch("http://localhost:8080/account", {
-      method: "POST",
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ account: "default" })
-    }
-    ).then(async (r) => {
-      const data = await r.json()
-      setWalletAddress(data.message)
-    })
-
-    // tranferMoney("1P3JSQhXCj2iUeNb1rDzrxSNry7PukwXKJ", 1).then(d => setTxId(d))
-  }, [])
-
-  console.log(sentTxId)
+  //   // tranferMoney("1P3JSQhXCj2iUeNb1rDzrxSNry7PukwXKJ", 1).then(d => setTxId(d))
+  // }, [])
 
   // const [walletAddress] = user
   // const [walletBalance] = balance
@@ -124,29 +125,27 @@ function Account(): JSX.Element {
             <div className="overflow-x-auto border border-gray-300 rounded-lg mb-2">
               <div className="flex items-center p-2 border-b border-gray-300">
                 <span className="flex-1 font-semibold">Date</span>
-                <span className="flex-1 font-semibold">File</span>
+                <span className="flex-[4] font-semibold">File</span>
                 <span className="flex-1 font-semibold">Cost (SWE)</span>
                 <span className="flex-1 font-semibold">Transaction Type</span>
-                <span className="flex-1 font-semibold">Proxy</span>
               </div>
             </div>
-            {/* {historyView.map((historyItem, index: number) => (
+            {historyView.map((historyItem, index: number) => (
               <div
                 key={index}
                 className="flex items-center px-2 py-1 border-b border-gray-300 rounded-md"
               >
                 <span className="flex-1 ">{formatDateTime(historyItem.date)}</span>
-                <div className="flex flex-1 items-center">
+                <div className="flex flex-[4] items-center">
                   <div>
-                    <span className="block font-semibold">{historyItem.file.name}</span>
-                    <span className="block text-gray-500">{historyItem.file.cid}</span>{' '}
+                    <span className="block font-semibold">{historyItem.file_name}</span>
+                    <span className="block text-gray-500">{historyItem.file_cid}</span>{' '}
                   </div>
                 </div>
-                <span className="flex-1 ">{historyItem.file.cost}</span>
+                <span className="flex-1 ">{historyItem.file_cost}</span>
                 <span className="flex-1 ">{historyItem.type}</span>
-                <span className="flex-1 ">{historyItem.proxy}</span>
               </div>
-            ))} */}
+            ))}
           </div>
         )}
 

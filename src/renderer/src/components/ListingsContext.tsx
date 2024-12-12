@@ -13,6 +13,7 @@ import {
   sendChatRequest
 } from '@renderer/rpcUtils'
 import LoadingModal from './LoadingModal'
+import { tranferMoney } from '@renderer/walletUtils'
 
 type providerType = {
   peer_id: string
@@ -65,7 +66,10 @@ type listingType = {
 const ListingsContent = () => {
   const {
     user: [peerId],
-    pathForDownload: [downloadPath]
+    pathForDownload: [downloadPath],
+    wallet: [walletAddress],
+    balance: [walletBalance, setWalletBalance],
+    history: [, setHistoryView]
   } = React.useContext(AppContext)
 
   const [discoveredFiles, setDiscoveredFiles] = useState<listingType[]>([])
@@ -323,18 +327,35 @@ const ListingsContent = () => {
 
   const handleBuyFile = async (listing: listingType) => {
     try {
-      const normalizedPath = downloadPath.endsWith('/') ? downloadPath : downloadPath + '/'
-      const data = await getFile(
-        listing.peer_id,
-        listing.data_cid,
-        normalizedPath + listing.file_name
-      )
+      let msg: string = `Name:  ${listing.file_name}\nSize:  ${listing.size} MB\nCost:  ${listing.price} SWE`
+      if (listing.price > walletBalance) {
+        alert(`${msg}\n\nNot enough SWE. Your current balance: ${walletBalance}.`)
+      } else {
+        const confirmed = window.confirm(
+          `${msg}\n\nYou currently have ${walletBalance} SWE. Would like to proceed with the purchase?`
+        )
+        if (confirmed) {
+          let data_cid = listing.data_cid
+          const normalizedPath = downloadPath.endsWith('/') ? downloadPath : downloadPath + '/'
+          const data = await getFile(listing.peer_id, data_cid, normalizedPath + listing.file_name)
+
+          tranferMoney(listing.wallet_address, listing.price)
+          setWalletBalance((prevBalance) => prevBalance - listing.price)
+
+          let newHistory = {
+            date: new Date(),
+            file_name: listing.file_name,
+            file_cid: listing.data_cid,
+            file_size: listing.size,
+            file_cost: listing.price,
+            type: 'buy'
+          }
+          setHistoryView((prevList) => [...prevList, newHistory])
+        }
+      }
     } catch (error) {
       console.log('Error downloading file: ', error)
     }
-
-    try {
-    } catch (error) {}
   }
 
   return (

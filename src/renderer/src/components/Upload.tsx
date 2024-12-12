@@ -41,13 +41,13 @@ type fileType = {
 function Upload(): JSX.Element {
     const fileInputRef = useRef<HTMLInputElement | null>(null)
 
-    const { user, sysPlatform, numUploadFiles, numUploadBytes, history } =
-        React.useContext(AppContext)
+  const { user, sysPlatform, history } =
+    React.useContext(AppContext)
 
     const [peerId] = user
     const [platform] = sysPlatform
 
-    const [historyView, setHistoryView] = history
+  const [, setHistoryView] = history
 
     const [numFiles, setNumFiles] = useState<number>(0)
     const [numBytes, setNumBytes] = useState<number>(0)
@@ -181,21 +181,21 @@ function Upload(): JSX.Element {
         }
     }
 
-    const handleCostConfirm = async (fileQueue: fileType[]) => {
-        setNumBytes(byteCount)
-        setNumFiles(fileCount)
-        await Promise.all(
-            fileQueue.map(async (file) => {
-                try {
-                    file.data_cid = await uploadFile(file.uploadPath, file.price)
-                } catch (error) {
-                    console.log(error)
-                }
-            })
-        )
-        setFilesToView((prevList) => prevList.concat(fileQueue))
-        setShowCostModal(false)
-    }
+  const handleCostConfirm = async (fileQueue: fileType[]) => {
+    setNumBytes(byteCount)
+    setNumFiles(fileCount)
+    await Promise.all(
+      fileQueue.map(async (file) => {
+        try {
+          file.data_cid = await uploadFile(file.uploadPath, file.price)
+        } catch (error) {
+          console.log(error)
+        }
+      })
+    )
+    setFilesToView((prevList) => prevList.concat(fileQueue))
+    setShowCostModal(false)
+  }
 
     const handleCostCancelAll = () => {
         setShowCostModal(false)

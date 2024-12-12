@@ -31,10 +31,12 @@ const ChatMenu: React.FC<ChatMenuProps> = ({ onClose, chat }) => {
   const { user } = React.useContext(AppContext)
   const [peerId] = user
 
+  console.log('this peer is ', peerId)
   const [message, setMessage] = useState<string>('')
   const [messages, setMessages] = useState<messageType[]>([])
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
 
+  console.log('messages ', messages)
   useEffect(() => {
     const interval = setInterval(() => {
       getMessages(chat.buyer, chat.chat_id)
@@ -58,6 +60,7 @@ const ChatMenu: React.FC<ChatMenuProps> = ({ onClose, chat }) => {
   const handleSend = async () => {
     if (message.trim()) {
       try {
+        console.log('remote peer is ', chat.buyer)
         const data = await sendMessage(chat.buyer, chat.chat_id, message)
         setMessages((prevlist: messageType[]) => [...prevlist, data])
         setMessage('')
