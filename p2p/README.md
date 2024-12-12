@@ -510,7 +510,6 @@ WalletAddress  string  - wallet address
 None
 ```
 
-
 ## p2p_registerAsProxy
 Registers the user as a proxy
 
