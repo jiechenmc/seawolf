@@ -509,3 +509,94 @@ WalletAddress  string  - wallet address
 ```
 None
 ```
+
+
+## p2p_registerAsProxy
+Registers the user as a proxy
+
+#### Parameters
+```
+price         float64  - price for the proxy service
+walletAddress string   - wallet address for receiving payments
+```
+
+#### Returns
+```
+None
+```
+
+## p2p_unregisterAsProxy
+Unregisters the user as a proxy
+
+#### Parameters
+```
+None
+```
+
+#### Returns
+```
+None
+```
+
+## p2p_connectToProxy
+Connects to a proxy
+
+#### Parameters
+```
+peerID  string  - peer ID of the proxy to connect to
+```
+
+#### Returns
+```
+None
+```
+
+## p2p_disconnectFromProxy
+Disconnects from the currently connected proxy
+
+#### Parameters
+```
+None
+```
+
+#### Returns
+```
+None
+```
+
+## p2p_getProxyBytes
+Gets the number of bytes transferred through the proxy
+
+#### Parameters
+```
+None
+```
+
+#### Returns
+```
+{
+    "rx_bytes": int64  - number of bytes received
+    "tx_bytes": int64  - number of bytes transmitted
+}
+```
+
+## p2p_getAllProxies
+Gets a list of all available proxies
+
+#### Parameters
+```
+None
+```
+
+#### Returns
+```
+[
+    {
+        "peer_id":       string  - peer ID of the proxy
+        "is_proxy":      bool    - whether the peer is a proxy
+        "price":         float64 - price for the proxy service
+        "wallet_address": string - wallet address for receiving payments
+    },
+    ...
+]
+```
