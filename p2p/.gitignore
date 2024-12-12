@@ -2,3 +2,5 @@
 *.sock
 bin/*
 seawolf_p2p
+fileshare
+*.tar.gz

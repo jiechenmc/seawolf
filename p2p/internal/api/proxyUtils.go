@@ -25,27 +25,28 @@ type ProxyStatus struct {
 }
 
 type ProxyNode struct {
-	host      host.Host
-	kadDHT    *dht.IpfsDHT
-	proxies   map[peer.ID]bool
-	proxyLock sync.Mutex
-	connected bool
-	stream    *P2PStream
+	host        host.Host
+	kadDHT      *dht.IpfsDHT
+	proxies     map[peer.ID]bool
+	proxyLock   sync.Mutex
+	connected   bool
+	proxyPeerID peer.ID
+	clients     map[peer.ID]bool
 }
 
 func ProxyNodeCreate(hostNode host.Host, kadDHT *dht.IpfsDHT, isProxy bool) *ProxyNode {
 	pn := &ProxyNode{
-		host:      hostNode,
-		kadDHT:    kadDHT,
-		proxies:   make(map[peer.ID]bool),
-		connected: false,
-		stream:    nil,
+		host:        hostNode,
+		kadDHT:      kadDHT,
+		proxies:     make(map[peer.ID]bool),
+		connected:   false,
+		proxyPeerID: "",
 	}
 	hostNode.SetStreamHandler(proxyProtocol, pn.proxyStreamHandler)
 	return pn
 }
 
-func (pn *ProxyNode) startTCPListener() {
+func (pn *ProxyNode) startTCPListener(proxyPeerID peer.ID) {
 	listener, err := net.Listen("tcp", tcpPort)
 	if err != nil {
 		log.Fatalf("Failed to start TCP listener: %v", err)
@@ -53,17 +54,65 @@ func (pn *ProxyNode) startTCPListener() {
 	defer listener.Close()
 
 	for {
-		// conn, err := listener.Accept()
-		// if err != nil {
-		// 	log.Printf("Failed to accept connection: %v", err)
-		// 	continue
-		// }
-		// go pn.handleTCPConnection(conn, proxyPeerID)
+		conn, err := listener.Accept()
+		if err != nil {
+			log.Printf("Failed to accept connection: %v", err)
+			continue
+		}
+		pn.proxyLock.Lock()
+		if pn.connected {
+			go pn.handleForwarding(conn)
+		} else {
+			conn.Close()
+		}
+		pn.proxyLock.Unlock()
 	}
 }
 
-func (pn *ProxyNode) handleTCPConnection(conn net.Conn, proxyPeerID peer.ID) error {
+func (pn *ProxyNode) handleForwarding(conn net.Conn) {
 	defer conn.Close()
+	stream, err := p2pOpenStream(context.Background(), proxyProtocol, pn.host, pn.kadDHT, pn.proxyPeerID.String())
+	if err != nil {
+		log.Printf("Failed to create libp2p stream: %v", err)
+		return
+	}
+	defer stream.Close()
+	// Forward data from TCP connection to libp2p stream
+	go func() {
+		buf := make([]byte, 1024)
+		for {
+			n, err := conn.Read(buf)
+			if err != nil {
+				log.Printf("Failed to read from TCP connection: %v", err)
+				return
+			}
+
+			err = stream.Send(buf[:n])
+			if err != nil {
+				log.Printf("Failed to send data over libp2p stream: %v", err)
+				return
+			}
+		}
+	}()
+
+	// Forward data from libp2p stream to TCP connection
+	for {
+		data, err := stream.Read(1, time.Minute)
+		if err != nil {
+			log.Printf("Failed to read from libp2p stream: %v", err)
+			return
+		}
+
+		_, err = conn.Write(data)
+		if err != nil {
+			log.Printf("Failed to write to TCP connection: %v", err)
+			return
+		}
+	}
+}
+
+// add to service
+func (pn *ProxyNode) ConnectToProxy(proxyPeerID peer.ID) error {
 
 	// check if proxyPeerID is a valid proxy
 	if !pn.IsProxy(proxyPeerID) {
@@ -76,21 +125,19 @@ func (pn *ProxyNode) handleTCPConnection(conn net.Conn, proxyPeerID peer.ID) err
 		log.Printf("Failed to create libp2p stream: %v", err)
 		return err
 	}
+	defer stream.Close()
 
 	err = stream.SendString("REQUEST\n")
 	if err != nil {
-		defer stream.Close()
 		return err
 	}
 
 	str, err := stream.ReadString('\n', proxyRequestTimeout)
 	if err != nil {
-		defer stream.Close()
 		return err
 	}
 
 	if str != "ACCEPT\n" {
-		defer stream.Close()
 		return fmt.Errorf("proxy rejected connection")
 	}
 
@@ -98,29 +145,14 @@ func (pn *ProxyNode) handleTCPConnection(conn net.Conn, proxyPeerID peer.ID) err
 
 	pn.proxyLock.Lock()
 	defer pn.proxyLock.Unlock()
+
 	if pn.connected {
-		defer stream.Close()
 		return fmt.Errorf("Already connected to a proxy")
 	}
-	pn.stream = stream
+
 	pn.connected = true
-
-	// Forward traffic between the TCP connection and the libp2p stream
-	// go io.Copy(stream, conn)
-	// io.Copy(conn, stream)
+	pn.proxyPeerID = proxyPeerID
 	return nil
-}
-
-func (pn *ProxyNode) selectProxyPeer() (peer.ID, error) {
-	pn.proxyLock.Lock()
-	defer pn.proxyLock.Unlock()
-
-	for proxyPeerID, isProxy := range pn.proxies {
-		if isProxy {
-			return proxyPeerID, nil
-		}
-	}
-	return "", fmt.Errorf("no available proxy peers")
 }
 
 func (pn *ProxyNode) IsProxy(peerID peer.ID) bool {
@@ -133,25 +165,74 @@ func (pn *ProxyNode) IsProxy(peerID peer.ID) bool {
 
 func (pn *ProxyNode) proxyStreamHandler(s network.Stream) {
 	stream := p2pWrapStream(&s)
-	defer stream.Close()
-	req, err := stream.ReadString('\n', proxyRequestTimeout)
-	if err != nil {
-		return
-	}
+	pn.proxyLock.Lock()
+	val, ok := pn.clients[stream.RemotePeerID]
+	pn.proxyLock.Unlock()
+	if ok && val {
+		conn, err := net.Dial("tcp", "localhost:8082")
+		if err != nil {
+			log.Printf("Failed to connect to tcp server: %v", err)
+			stream.Close()
+			return
+		}
+		go pn.handleTraffic(conn, stream)
+	} else {
+		defer stream.Close()
+		req, err := stream.ReadString('\n', proxyRequestTimeout)
+		if err != nil {
+			return
+		}
 
-	switch req {
-	case "REGISTER\n":
-		err = pn.handleRegisterProxy(context.Background(), stream)
-		if err != nil {
-			stream.Close()
+		switch req {
+		case "REQUEST\n":
+			err = stream.SendString("ACCEPT\n")
+			if err != nil {
+				return
+			}
+			pn.proxyLock.Lock()
+			pn.clients[stream.RemotePeerID] = true
+			pn.proxyLock.Unlock()
+
+		default:
+			return
 		}
-	case "UNREGISTER\n":
-		err = pn.handleUnregisterProxy(context.Background(), stream)
-		if err != nil {
-			stream.Close()
+	}
+}
+
+func (pn *ProxyNode) handleTraffic(conn net.Conn, stream *P2PStream) {
+	defer conn.Close()
+	defer stream.Close()
+	// Forward data from TCP connection to libp2p stream
+	go func() {
+		buf := make([]byte, 1024)
+		for {
+			n, err := conn.Read(buf)
+			if err != nil {
+				log.Printf("Failed to read from TCP connection: %v", err)
+				return
+			}
+
+			err = stream.Send(buf[:n])
+			if err != nil {
+				log.Printf("Failed to send data over libp2p stream: %v", err)
+				return
+			}
 		}
-	default:
-		stream.Close()
+	}()
+
+	// Forward data from libp2p stream to TCP connection
+	for {
+		data, err := stream.Read(1, time.Minute)
+		if err != nil {
+			log.Printf("Failed to read from libp2p stream: %v", err)
+			return
+		}
+
+		_, err = conn.Write(data)
+		if err != nil {
+			log.Printf("Failed to write to TCP connection: %v", err)
+			return
+		}
 	}
 }
 

@@ -470,3 +470,16 @@ func (s *P2PService) UnregisterAsProxy() error {
 	}
 	return s.proxyNode.UnregisterAsProxy(context.Background())
 }
+
+func (s *P2PService) ConnectToProxy(peerID string) error {
+	if s.username == nil || s.proxyNode == nil {
+		log.Printf("Attempted to connect to proxy when not logged in\n")
+		return notLoggedIn
+	}
+	peer_ID, err := peer.Decode(peerID)
+	if err != nil {
+		log.Printf("Failed to decode provider ID string '%v'. %v\n", peerID, err)
+		return invalidParams
+	}
+	return s.proxyNode.ConnectToProxy(peer_ID)
+}
