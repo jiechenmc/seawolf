@@ -261,7 +261,7 @@ func p2pConnectToPeerUsingRelay(ctx context.Context, node host.Host, targetPeerI
 func p2pDeleteHost(node host.Host) error {
 	err := node.Close()
 	if err != nil {
-		log.Panic("Failed to clean up libp2p host after DHT creation failure")
+		log.Printf("Failed to clean up libp2p host after login failure\n")
 	}
 	return err
 }

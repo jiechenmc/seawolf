@@ -44,7 +44,7 @@ type BytesTransferred struct {
 	TxBytes int64 `json:"tx_bytes"`
 }
 
-func ProxyNodeCreate(hostNode host.Host, kadDHT *dht.IpfsDHT) *ProxyNode {
+func ProxyNodeCreate(hostNode host.Host, kadDHT *dht.IpfsDHT) (*ProxyNode, error) {
 	pn := &ProxyNode{
 		host:        hostNode,
 		kadDHT:      kadDHT,
@@ -57,31 +57,34 @@ func ProxyNodeCreate(hostNode host.Host, kadDHT *dht.IpfsDHT) *ProxyNode {
 	}
 	hostNode.SetStreamHandler(proxyProtocol, pn.proxyStreamHandler)
 	hostNode.SetStreamHandler(proxyDataProtocol, pn.proxyDataStreamHandler)
-	go pn.startTCPListener()
-	return pn
+	err := pn.startTCPListener()
+	return pn, err
 }
 
-func (pn *ProxyNode) startTCPListener() {
+func (pn *ProxyNode) startTCPListener() error {
 	listener, err := net.Listen("tcp", tcpPort)
 	if err != nil {
-		log.Fatalf("Failed to start TCP listener: %v", err)
-	}
-	defer listener.Close()
-
-	for {
-		conn, err := listener.Accept()
-		if err != nil {
-			log.Printf("Failed to accept connection: %v", err)
-			continue
+        log.Printf("Failed to start TCP listener: %v", err)
+        return internalError
+    }
+    go func() {
+		defer listener.Close()
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				log.Printf("Failed to accept connection: %v", err)
+				continue
+			}
+			pn.proxyLock.Lock()
+			if pn.connected {
+				go pn.handleForwarding(conn)
+			} else {
+				conn.Close()
+			}
+			pn.proxyLock.Unlock()
 		}
-		pn.proxyLock.Lock()
-		if pn.connected {
-			go pn.handleForwarding(conn)
-		} else {
-			conn.Close()
-		}
-		pn.proxyLock.Unlock()
-	}
+    }()
+    return nil
 }
 
 func (pn *ProxyNode) handleForwarding(conn net.Conn) {
