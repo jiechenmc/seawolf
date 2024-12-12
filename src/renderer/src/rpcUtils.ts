@@ -1,5 +1,168 @@
 const PORT = 8081
 
+export interface Proxy {
+  peer_id: string
+  is_proxy: boolean
+  price: number
+  wallet_address: string
+}
+
+export async function registerAsProxy(
+  price: number,
+  walletAddress: string,
+  id: number = 1
+): Promise<any> {
+  const request = {
+    jsonrpc: '2.0',
+    id: id,
+    method: 'p2p_registerAsProxy',
+    params: [price, walletAddress]
+  }
+
+  const response = await fetch(`http://localhost:${PORT}/rpc`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(request)
+  })
+
+  const data = await response.json()
+
+  if (data.error) {
+    throw new Error(data.error.message)
+  }
+
+  return data.result
+}
+
+export async function unregisterAsProxy(id: number = 1): Promise<any> {
+  const request = {
+    jsonrpc: '2.0',
+    id: id,
+    method: 'p2p_unregisterAsProxy',
+    params: []
+  }
+
+  const response = await fetch(`http://localhost:${PORT}/rpc`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(request)
+  })
+
+  const data = await response.json()
+
+  if (data.error) {
+    throw new Error(data.error.message)
+  }
+
+  return data.result
+}
+
+export async function connectToProxy(peerID: string, id: number = 1): Promise<any> {
+  const request = {
+    jsonrpc: '2.0',
+    id: id,
+    method: 'p2p_connectToProxy',
+    params: [peerID]
+  }
+
+  const response = await fetch(`http://localhost:${PORT}/rpc`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(request)
+  })
+
+  const data = await response.json()
+
+  if (data.error) {
+    throw new Error(data.error.message)
+  }
+
+  return data.result
+}
+
+export async function disconnectFromProxy(id: number = 1): Promise<any> {
+  const request = {
+    jsonrpc: '2.0',
+    id: id,
+    method: 'p2p_disconnectFromProxy',
+    params: []
+  }
+
+  const response = await fetch(`http://localhost:${PORT}/rpc`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(request)
+  })
+
+  const data = await response.json()
+
+  if (data.error) {
+    throw new Error(data.error.message)
+  }
+
+  return data.result
+}
+
+export async function getProxyBytes(
+  id: number = 1
+): Promise<{ rx_bytes: number; tx_bytes: number }> {
+  const request = {
+    jsonrpc: '2.0',
+    id: id,
+    method: 'p2p_getProxyBytes',
+    params: []
+  }
+
+  const response = await fetch(`http://localhost:${PORT}/rpc`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(request)
+  })
+
+  const data = await response.json()
+
+  if (data.error) {
+    throw new Error(data.error.message)
+  }
+
+  return data.result
+}
+
+export async function getAllProxies(id: number = 1): Promise<Proxy[]> {
+  const request = {
+    jsonrpc: '2.0',
+    id: id,
+    method: 'p2p_getAllProxies',
+    params: []
+  }
+
+  const response = await fetch(`http://localhost:${PORT}/rpc`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(request)
+  })
+
+  const data = await response.json()
+
+  if (data.error) {
+    throw new Error(data.error.message)
+  }
+
+  return data.result
+}
+
 export async function registerUser(
   username: string,
   password: string,

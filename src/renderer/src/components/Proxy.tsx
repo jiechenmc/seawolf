@@ -1,130 +1,195 @@
-import React, { useContext, useState } from 'react'
+/* eslint-disable prettier/prettier */
+import { useContext, useState, useEffect } from 'react'
 import SideNav from './SideNav'
-// import Navbar from './NavBar'
 import { AppContext } from '../AppContext'
+import LoadingModal from './LoadingModal'
+import {
+    Proxy,
+    getAllProxies,
+    connectToProxy,
+    disconnectFromProxy,
+    registerAsProxy,
+    unregisterAsProxy
+} from '../rpcUtils'
 
-type Proxy = {
-  ip: string
-  location: string
-  cost: number
-}
+function ProxyComponent(): JSX.Element {
+    const { proxy, proxies } = useContext(AppContext)
+    const [currProxy, setCurrProxy] = proxy
+    const [listOfProxies, setListOfProxies] = proxies
 
-function Proxy(): JSX.Element {
-  // const [currProxy, setCurrProxy] = useState<Proxy | null>(null)
-  // const [listOfProxies, setListOfProxies] = useState<Proxy[]>(testList)
-  const { proxy, proxies } = React.useContext(AppContext)
-  const [currProxy, setCurrProxy] = proxy
-  const [listOfProxies, setListOfProxies] = proxies
+    const [serveAsProxy, setServeAsProxy] = useState(false)
+    const [walletAddress, setWalletAddress] = useState('')
+    const [price, setPrice] = useState(0)
+    const [loading] = useState<boolean>(false)
 
-  const [serveAsProxy, setServeAsProxy] = useState(false)
+    useEffect(() => {
+        // Fetch the list of proxies from the backend
+        const fetchProxies = async (): Promise<void> => {
+            try {
+                const proxies = await getAllProxies()
+                setListOfProxies(proxies)
+            } catch (error) {
+                console.error('Failed to fetch proxies:', error)
+            }
+        }
 
-  console.log('list proxies', listOfProxies)
-  const handleChooseProxy = (proxy: Proxy) => {
-    const isConfirmed = window.confirm(`Are you sure you want to connect to IP: ${proxy.ip}?`)
+        fetchProxies()
+    }, [setListOfProxies])
 
-    if (isConfirmed) {
-      setCurrProxy(proxy)
+    const handleChooseProxy = async (proxy: Proxy): Promise<void> => {
+        const isConfirmed = window.confirm(
+            `Are you sure you want to connect to peer ID: ${proxy.peer_id}?`
+        )
+
+        if (isConfirmed) {
+            try {
+                await connectToProxy(proxy.peer_id)
+                setCurrProxy(proxy)
+            } catch (error) {
+                console.error('Failed to connect to proxy:', error)
+            }
+        }
     }
-  }
 
-  const handleRemoveProxy = () => {
-    const isConfirmed = window.confirm(
-      `Are you sure you want to disconnect from IP: ${currProxy?.ip}?`
-    )
+    const handleRemoveProxy = async (): Promise<void> => {
+        if (currProxy) {
+            const isConfirmed = window.confirm(
+                `Are you sure you want to disconnect from peer ID: ${currProxy.peer_id}?`
+            )
 
-    if (isConfirmed) {
-      setCurrProxy(null)
+            if (isConfirmed) {
+                try {
+                    await disconnectFromProxy()
+                    setCurrProxy(null)
+                } catch (error) {
+                    console.error('Failed to disconnect from proxy:', error)
+                }
+            }
+        }
     }
-  }
 
-  const handleToggle = () => {
-    setServeAsProxy((prev) => !prev)
-  }
+    const handleToggle = async (): Promise<void> => {
+        if (!serveAsProxy) {
+            // Register as proxy
+            if (!walletAddress || !price) {
+                alert('Please enter a valid wallet address and price.')
+                return
+            }
+            try {
+                await registerAsProxy(price, walletAddress)
+                setServeAsProxy(true)
+            } catch (error) {
+                console.error('Failed to register as proxy:', error)
+            }
+        } else {
+            // Unregister as proxy
+            try {
+                await unregisterAsProxy()
+                setServeAsProxy(false)
+            } catch (error) {
+                console.error('Failed to unregister as proxy:', error)
+            }
+        }
+    }
 
-  return (
-    <div className="flex ml-52">
-      {/* <Navbar /> */}
-      <SideNav />
+    return (
+        <div className="flex ml-52">
+            <SideNav />
 
-      <div className="flex-1 p-6">
-        <h1 className="text-2xl font-bold mb-4">Proxy</h1>
+            <div className="flex-1 p-6">
+                <h1 className="text-2xl font-bold mb-4">Proxy</h1>
 
-        <div className="bg-white p-4 rounded-lg shadow-md mb-8">
-          <h2 className="text-xl font-semibold pb-5">Serve As Proxy</h2>
-          <p className=" text-gray-700 mb-4">
-            {serveAsProxy
-              ? `Currently serving as a proxy on IP: 192.1.213.72`
-              : 'Currently not serving as a proxy'}
-          </p>
-          <div
-            onClick={handleToggle}
-            className={`${
-              serveAsProxy ? 'bg-green-500' : 'bg-gray-300'
-            } relative inline-flex h-6 w-11 items-center rounded-full cursor-pointer transition-colors`}
-          >
-            <span
-              className={`${
-                serveAsProxy ? 'translate-x-6' : 'translate-x-1'
-              } inline-block w-4 h-4 transform bg-white rounded-full transition-transform`}
-            />
-          </div>
-        </div>
+                <div className="bg-white p-4 rounded-lg shadow-md mb-8">
+                    <h2 className="text-xl font-semibold pb-5">Serve As Proxy</h2>
+                    <p className="text-gray-700 mb-4">
+                        {serveAsProxy ? 'Currently serving as a proxy' : 'Currently not serving as a proxy'}
+                    </p>
 
-        <div className="bg-white p-4 rounded-lg shadow-md mb-16">
-          <h2 className="text-xl font-semibold pb-5">Currently Connected To:</h2>
-          <div>
-            {currProxy ? (
-              <div>
-                <div className="flex justify-between mt-2">
-                  <div className="flex-1 text-center">
-                    <h3 className="font-bold">IP Address</h3>
-                    <p className="text-lg">{currProxy.ip}</p>
-                  </div>
-                  <div className="flex-1 text-center">
-                    <h3 className="font-bold">Location</h3>
-                    <p className="text-lg">{currProxy.location}</p>
-                  </div>
-                  <div className="flex-1 text-center">
-                    <h3 className="font-bold">Cost</h3>
-                    <p className="text-lg">${currProxy.cost}</p>
-                  </div>
+                    {!serveAsProxy && (
+                        <div className="mb-4">
+                            <label className="block text-gray-700">Wallet Address:</label>
+                            <input
+                                type="text"
+                                value={walletAddress}
+                                onChange={(e) => setWalletAddress(e.target.value)}
+                                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
+                            />
+                            <label className="block text-gray-700 mt-4">Price (SWE per MB):</label>
+                            <input
+                                type="number"
+                                value={price}
+                                onChange={(e) => setPrice(parseFloat(e.target.value))}
+                                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
+                            />
+                        </div>
+                    )}
+
+                    <div
+                        onClick={handleToggle}
+                        className={`${serveAsProxy ? 'bg-green-500' : 'bg-gray-300'
+                            } relative inline-flex h-6 w-11 items-center rounded-full cursor-pointer transition-colors`}
+                    >
+                        <span
+                            className={`${serveAsProxy ? 'translate-x-6' : 'translate-x-1'
+                                } inline-block w-4 h-4 transform bg-white rounded-full transition-transform`}
+                        />
+                    </div>
                 </div>
-                <button
-                  className="mt-7 px-4 py-2 bg-[#737fa3] text-white font-semibold rounded-md hover:bg-[#7c85a3]"
-                  onClick={handleRemoveProxy}
-                >
-                  Disconnect
-                </button>
-              </div>
-            ) : (
-              <p className="text-l">None. Please choose one from below to get started.</p>
-            )}
-          </div>
+
+                <div className="bg-white p-4 rounded-lg shadow-md mb-16">
+                    <h2 className="text-xl font-semibold pb-5">Currently Connected To:</h2>
+                    <div>
+                        {currProxy ? (
+                            <div>
+                                <div className="flex justify-between mt-2">
+                                    <div className="flex-1 text-center">
+                                        <h3 className="font-bold">Peer ID</h3>
+                                        <p className="text-lg">{currProxy.peer_id}</p>
+                                    </div>
+                                    <div className="flex-1 text-center">
+                                        <h3 className="font-bold">Cost</h3>
+                                        <p className="text-lg">{currProxy.price} SWE</p>
+                                    </div>
+                                </div>
+                                <button
+                                    className="mt-7 px-4 py-2 bg-[#737fa3] text-white font-semibold rounded-md hover:bg-[#7c85a3]"
+                                    onClick={handleRemoveProxy}
+                                >
+                                    Disconnect
+                                </button>
+                            </div>
+                        ) : (
+                            <p className="text-l">None. Please choose one from below to get started.</p>
+                        )}
+                    </div>
+                </div>
+                <h2 className="text-xl font-semibold mb-2">Choose A Proxy</h2>
+                <div className="overflow-x-auto border border-gray-300 rounded-lg">
+                    <div className="flex items-center p-2 border-b border-gray-300">
+                        <span className="flex-1 font-semibold text-left">Peer ID</span>
+                        <span className="flex-1 font-semibold text-left">Cost / MB</span>
+                    </div>
+                    <div>
+                        <LoadingModal isVisible={loading} />
+                        {listOfProxies && listOfProxies.length > 0 ? (
+                            listOfProxies.map((proxy: Proxy, index: number) => (
+                                <button
+                                    key={index}
+                                    onClick={() => handleChooseProxy(proxy)}
+                                    className="flex items-center p-2 w-full hover:bg-gray-200 border-b border-gray-300"
+                                >
+                                    <span className="flex-1 text-left">{proxy.peer_id}</span>
+                                    <span className="flex-1 text-left">{proxy.price} SWE</span>
+                                </button>
+                            ))
+                        ) : (
+                            <p className="text-center p-4">No proxies available.</p>
+                        )}
+                    </div>
+                </div>
+            </div>
         </div>
-        <h2 className="text-xl font-semibold mb-2">Choose A Proxy</h2>
-        <div className="overflow-x-auto border border-gray-300 rounded-lg">
-          <div className="flex items-center p-2 border-b border-gray-300">
-            <span className="flex-1 font-semibold text-left">IP Address</span>
-            <span className="flex-1 font-semibold text-left">Location</span>
-            <span className="flex-1 font-semibold text-left">Cost / MB</span>
-          </div>
-          <div>
-            {listOfProxies.map((proxy, index) => (
-              <button
-                key={index}
-                onClick={() => handleChooseProxy(proxy)}
-                className="flex items-center p-2 w-full hover:bg-gray-200 border-b border-gray-300"
-              >
-                <span className="flex-1 text-left">{proxy.ip}</span>
-                <span className="flex-1 text-left">{proxy.location}</span>
-                <span className="flex-1 text-left">${proxy.cost}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  )
+    )
 }
 
-export default Proxy
+export default ProxyComponent
