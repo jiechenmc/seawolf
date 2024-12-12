@@ -7,6 +7,7 @@ import { AppContext } from '../AppContext'
 import ChatMenu from './ChatMenu'
 import {
   discoverFiles,
+  getChat,
   getFile,
   getOutgoingChatRequests,
   sendChatRequest
@@ -26,6 +27,7 @@ type discoverType = {
 }
 
 type requestType = {
+  chat_id?: number
   request_id: number
   peer_id: string
   file_cid: string
@@ -65,7 +67,6 @@ const ListingsContent = () => {
     pathForDownload: [downloadPath]
   } = React.useContext(AppContext)
 
-  const [marketListings, setMarketListings] = useState([])
   const [discoveredFiles, setDiscoveredFiles] = useState<listingType[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [displayedListings, setDisplayedListings] = useState<listingType[]>([])
@@ -73,24 +74,67 @@ const ListingsContent = () => {
   const [showSortOptions, setShowSortOptions] = useState(false)
 
   const [isChatOpen, setIsChatOpen] = useState(false)
+  const [currentChat, setCurrentChat] = useState<chatType>()
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         const data = await discoverFiles()
-        let arr: listingType[] = data
-          .flatMap((discover: discoverType) =>
-            discover.providers.map((provider: providerType) => ({
-              size: discover.size,
-              data_cid: discover.data_cid,
-              peer_id: provider.peer_id,
-              price: provider.price,
-              file_name: provider.file_name,
-              wallet_address: provider.wallet_address,
-              request_chat_status: 'not yet'
-            }))
+        const data2 = await getOutgoingChatRequests()
+
+        const statusMap = new Map<
+          string,
+          { chat_id: number | undefined; request_id: number; status: string }
+        >()
+        data2.forEach((request: requestType) => {
+          let key = `${request.peer_id}+${request.file_cid}`
+          statusMap.set(key, {
+            chat_id: request.chat_id,
+            request_id: request.request_id,
+            status: request.status
+          })
+        })
+
+        console.log('status map, ', statusMap)
+        let arr: listingType[] = await Promise.all(
+          data.flatMap((discover: discoverType) =>
+            discover.providers.map(async (provider: providerType) => {
+              let key = `${provider.peer_id}+${discover.data_cid}`
+              let requestData = statusMap.get(key)
+              let chatID = requestData?.chat_id || -1
+              let newListing = {
+                size: discover.size,
+                data_cid: discover.data_cid,
+                peer_id: provider.peer_id,
+                price: provider.price,
+                file_name: provider.file_name,
+                wallet_address: provider.wallet_address
+              }
+              if (requestData) {
+                if (chatID) {
+                  return {
+                    ...newListing,
+                    request_chat_status: requestData.status,
+                    request_id: requestData.request_id
+                  }
+                } else {
+                  return {
+                    ...newListing,
+                    request_chat_status: requestData.status,
+                    request_id: requestData.request_id,
+                    chat: await getChat(provider.peer_id, chatID)
+                  }
+                }
+              } else {
+                return {
+                  ...newListing,
+                  request_chat_status: 'not yet'
+                }
+              }
+            })
           )
-          .filter((listing: listingType) => listing.peer_id !== peerId)
+        )
+        arr = arr.filter((listing: listingType) => listing.peer_id !== peerId)
         setDiscoveredFiles(arr)
         setDisplayedListings(arr)
       } catch (error) {
@@ -113,9 +157,19 @@ const ListingsContent = () => {
               if (eachListing.request_id) {
                 const status = statusMap.get(eachListing.request_id)
                 if (status) {
-                  return {
-                    ...eachListing,
-                    request_chat_status: status
+                  if (data.chat_id) {
+                    getChat(eachListing.peer_id, data.chat_id).then((chatData) => {
+                      return {
+                        ...eachListing,
+                        request_chat_status: status,
+                        chat: chatData
+                      }
+                    })
+                  } else {
+                    return {
+                      ...eachListing,
+                      request_chat_status: status
+                    }
                   }
                 }
               }
@@ -127,9 +181,19 @@ const ListingsContent = () => {
               if (eachListing.request_id) {
                 const status = statusMap.get(eachListing.request_id)
                 if (status) {
-                  return {
-                    ...eachListing,
-                    request_chat_status: status
+                  if (data.chat_id) {
+                    getChat(eachListing.peer_id, data.chat_id).then((chatData) => {
+                      return {
+                        ...eachListing,
+                        request_chat_status: status,
+                        chat: chatData
+                      }
+                    })
+                  } else {
+                    return {
+                      ...eachListing,
+                      request_chat_status: status
+                    }
                   }
                 }
               }
@@ -146,6 +210,7 @@ const ListingsContent = () => {
   }, [])
 
   const handleChatOpen = (listing: listingType) => {
+    setCurrentChat(listing.chat)
     setIsChatOpen(true)
   }
 
@@ -228,9 +293,9 @@ const ListingsContent = () => {
     if (searchTerm === '') {
       setDisplayedListings(discoveredFiles)
     } else {
-      const searchList = marketListings.filter(
-        (listing: discoverType) =>
-          listing.providers[0].file_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      const searchList = discoveredFiles.filter(
+        (listing: listingType) =>
+          listing.file_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
           listing.data_cid.toString().includes(searchTerm)
       )
       setDisplayedListings(searchList)
@@ -364,17 +429,17 @@ const ListingsContent = () => {
                 Request Chat
               </button>
             ) : listing.request_chat_status === 'pending' ? (
-              <button className="bg-[#737fa3] text-white px-3 py-1 rounded">
+              <button className="bg-[#919191] text-white px-3 py-1 rounded">
                 Pending Chat Request
               </button>
             ) : listing.request_chat_status === 'declined' ? (
-              <button className="bg-[#737fa3] text-white px-3 py-1 rounded">
+              <button className="bg-[#ffcece] text-white px-3 py-1 rounded">
                 Request Declined
               </button>
             ) : (
               <button
                 onClick={() => handleChatOpen(listing)}
-                className="bg-[#737fa3] text-white px-3 py-1 rounded"
+                className="bg-[#839eb9] text-white px-3 py-1 rounded"
               >
                 Chat now
               </button>
@@ -383,7 +448,7 @@ const ListingsContent = () => {
         </div>
       ))}
 
-      {isChatOpen && <ChatMenu onClose={handleChatClose} />}
+      {isChatOpen && <ChatMenu onClose={handleChatClose} chat={currentChat} />}
 
       {/* Pagination */}
       {/* <div className="mt-4 flex justify-center gap-2">

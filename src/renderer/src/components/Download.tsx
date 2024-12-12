@@ -1,5 +1,5 @@
 import SideNav from './SideNav'
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect } from 'react'
 import { AppContext } from '../AppContext'
 import { FaRegTrashAlt } from 'react-icons/fa'
 import { FaRegCirclePause } from 'react-icons/fa6'
@@ -12,7 +12,6 @@ import {
   pauseDownload,
   resumeDownload
 } from '@renderer/rpcUtils'
-import { BsDisplayFill } from 'react-icons/bs'
 
 type downloadType = {
   size: number
@@ -60,8 +59,6 @@ function Download(): JSX.Element {
   const [currProxy, setCurrProxy] = proxy
   const [walletBalance, setWalletBalance] = balance
   const [, setHistoryView] = history
-
-  const [completedDownloads, setCompletedDownloads] = useState([])
 
   const [showProviders, setShowProviders] = useState<boolean>(false)
   const [providers, setProviders] = useState<discoverType>()

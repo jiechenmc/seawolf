@@ -165,6 +165,17 @@ const UserListings = () => {
     try {
       let chatID = chatRequest.chat?.chat_id || -1
       const data = await finishChat(chatRequest.peer_id, chatID)
+      setChatRequests((prevRequests: chatRequestType[]) =>
+        prevRequests.map((request) =>
+          request.chat?.chat_id === data.chat_id
+            ? {
+                ...chatRequest,
+                status: 'finished',
+                chat: data
+              }
+            : request
+        )
+      )
     } catch (error) {
       console.log('Error closing up chat: ', error)
     }
@@ -303,7 +314,7 @@ const UserListings = () => {
           key={index}
           className="flex items-center px-2 py-1 border-b border-gray-300 rounded-md"
         >
-          <div className="flex flex-1 items-center">
+          <div className="flex flex-[4.5] items-center">
             <div className="flex flex-col items-center justify-center h-full mr-5">
               {getFileIcon(listing.file_name)}
             </div>
@@ -394,7 +405,7 @@ const UserListings = () => {
                         onClick={() => handleChatOpen(chatRequest)}
                         className="bg-blue-500 text-white px-4 py-2 rounded-md"
                       >
-                        Show Chat
+                        Chat Now
                       </button>
                       {chatRequest.chat?.status !== 'finished' && (
                         <button
@@ -404,6 +415,16 @@ const UserListings = () => {
                           Finish Chat
                         </button>
                       )}
+                    </div>
+                  )}
+                  {chatRequest.status === 'finished' && (
+                    <div className="flex gap-2 mt-2">
+                      <button
+                        onClick={() => handleChatOpen(chatRequest)}
+                        className="bg-blue-500 text-white px-4 py-2 rounded-md"
+                      >
+                        View Chat History
+                      </button>
                     </div>
                   )}
                 </li>

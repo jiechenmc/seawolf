@@ -435,7 +435,7 @@ export async function acceptChatRequest(
   })
 
   const data = await response.json()
-
+  console.log('chat request was accepted: ', data)
   if (data.error) {
     throw new Error('Error accepting chat request : ', data.error)
   }
@@ -470,6 +470,31 @@ export async function declineChatRequest(
   }
 
   return data
+}
+
+export async function getChat(peerID: string, chatID: number, id: number = 1): Promise<any> {
+  const request = {
+    jsonrpc: '2.0',
+    id: id,
+    method: 'p2p_getChat',
+    params: [peerID, chatID]
+  }
+
+  const response = await fetch(`http://localhost:${PORT}/rpc`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(request)
+  })
+
+  const data = await response.json()
+
+  if (data.error) {
+    throw new Error('Error getting chat: ', data.error)
+  }
+
+  return data.result
 }
 
 export async function finishChat(peerID: string, chatID: number, id: number = 1): Promise<any> {

@@ -4,6 +4,7 @@ export {}
 
 declare global {
   interface ElectronAPI {
+    process: any
     getPlatform: () => Promise<string>
     getDownloadPath: () => Promise<string>
   }

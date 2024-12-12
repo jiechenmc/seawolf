@@ -68,7 +68,7 @@ const ChatMenu: React.FC<ChatMenuProps> = ({ onClose, chat }) => {
   }
 
   return (
-    <div className="fixed bottom-10 right-10 w-80 h-96 bg-white rounded-lg shadow-lg p-4 flex flex-col">
+    <div className="fixed bottom-10 right-10 w-2/5 h-96 bg-white rounded-lg shadow-lg p-4 flex flex-col">
       <div className="flex justify-between items-center border-b-2 pb-2 mb-2">
         <span className="font-semibold">{chat.buyer}</span>
         <button onClick={onClose}>
