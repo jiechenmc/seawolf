@@ -28,7 +28,7 @@ Please rerun `./bootstrap.sh` after any changes to the wallet seed.
 
 ### Running Proxy
 
-The SOCKS5 proxy will be ran in a container in the setup by `bootstrap.sh` and be availabe on PORT `8082`.
+The SOCKS5 proxy will be ran in a container in the setup by `bootstrap.sh` and traffic will be sent over TCP on port `8083` after you connect to a node acting as proxy.
 
 ### Running p2p Backend
 
