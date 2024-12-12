@@ -26,6 +26,10 @@ Set the apporiate wallet seed in `docker-compose.yml` on line `12` before contin
 
 Please rerun `./bootstrap.sh` after any changes to the wallet seed.
 
+### Running Proxy
+
+The SOCKS5 proxy will be ran in a container in the setup by `bootstrap.sh` and be availabe on PORT `8082`.
+
 ### Running p2p Backend
 
 ```bash
