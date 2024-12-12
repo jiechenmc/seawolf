@@ -241,13 +241,9 @@ function Upload(): JSX.Element {
                         </div>
                         <div className="flex-1 text-center">
                             <h3 className="font-bold">Total Bytes</h3>
-                            <p className="text-lg">
-                                {Math.round(numBytes / 1e6) === 0
-                                    ? '0 MB'
-                                    : (numBytes / 1e6).toLocaleString(undefined, {
-                                        minimumFractionDigits: 0,
-                                        maximumFractionDigits: 4
-                                    }) + ' MB'}
+                            <p className="text-lg"> {(numBytes / 1e6).toLocaleString(undefined, {
+                      minimumFractionDigits: 0,
+                      maximumFractionDigits: 4})} mb
                             </p>
                         </div>
                     </div>
