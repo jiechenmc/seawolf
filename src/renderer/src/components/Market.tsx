@@ -6,9 +6,11 @@ import UserListings from './UserListings'
 import { AppContext } from '../AppContext'
 
 function Market(): JSX.Element {
-  const [activeTab, setActiveTab] = useState<'Listings' | 'YourListings' | 'CreateListing'>(
-    'Listings'
-  )
+  // const [activeTab, setActiveTab] = useState<'Listings' | 'YourListings' | 'CreateListing'>(
+  //   'Listings'
+  // )
+  const [activeTab, setActiveTab] = useState<'Listings' | 'YourListings'>('Listings')
+
   return (
     <div className="flex ml-52">
       <SideNav />
@@ -17,22 +19,28 @@ function Market(): JSX.Element {
         <div className="flex mb-6">
           <button
             className={`mr-4 px-4 py-2 ${activeTab === 'Listings' ? 'bg-[#737fa3] hover:bg-[#7c85a3] text-white' : 'bg-gray-200'} rounded-lg`}
-            onClick={() => setActiveTab('Listings')}
+            onClick={() => {
+              setActiveTab('Listings')
+            }}
           >
-            Listings
+            All Listings
           </button>
           <button
             className={`mr-4 px-4 py-2 ${activeTab === 'YourListings' ? 'bg-[#737fa3] hover:bg-[#7c85a3] text-white' : 'bg-gray-200'} rounded-lg`}
-            onClick={() => setActiveTab('YourListings')}
+            onClick={() => {
+              setActiveTab('YourListings')
+            }}
           >
             Your Listings
           </button>
-          <button
+          {/* <button
             className={`px-4 py-2 ${activeTab === 'CreateListing' ? 'bg-[#737fa3] hover:bg-[#7c85a3] text-white' : 'bg-gray-200'} rounded-lg`}
-            onClick={() => setActiveTab('CreateListing')}
+            onClick={() => {
+              setActiveTab('CreateListing')
+            }}
           >
             Create Listing
-          </button>
+          </button> */}
         </div>
 
         {activeTab === 'Listings' && (
@@ -52,13 +60,13 @@ function Market(): JSX.Element {
           </div>
         )}
 
-        {activeTab === 'CreateListing' && (
+        {/* {activeTab === 'CreateListing' && (
           <div>
             <h2 className="text-xl font-semibold mb-2">Create New Listing</h2>
             <div className="border-b border-gray-300 mb-4"></div>
             <CreateListingContent />
           </div>
-        )}
+        )} */}
       </div>
     </div>
   )

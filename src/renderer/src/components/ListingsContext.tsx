@@ -5,26 +5,147 @@ import { BsFiletypeMp4, BsFiletypeMp3, BsFiletypePng, BsFiletypeJpg } from 'reac
 import { ChevronDown } from 'lucide-react'
 import { AppContext } from '../AppContext'
 import ChatMenu from './ChatMenu'
+import {
+  discoverFiles,
+  getFile,
+  getOutgoingChatRequests,
+  sendChatRequest
+} from '@renderer/rpcUtils'
 
-type ListingType = {
-  cid: number
-  name: string
-  size: number
-  cost: number
-  endDate: string
-  type: 'sale' | 'auction'
-  status: 'active' | 'ended'
+type providerType = {
+  peer_id: string
+  price: number
+  file_name: string
+  wallet_address: string
 }
+
+type discoverType = {
+  size: number
+  data_cid: string
+  providers: providerType[]
+}
+
+type requestType = {
+  request_id: number
+  peer_id: string
+  file_cid: string
+  status: string
+}
+
+type messageType = {
+  timestamp: string
+  from: string
+  text: string
+}
+
+type chatType = {
+  chat_id: number
+  buyer: string
+  seller: string
+  file_cid: string
+  status: string
+  messages: messageType[]
+}
+
+type listingType = {
+  size: number
+  data_cid: string
+  peer_id: string
+  price: number
+  file_name: string
+  wallet_address: string
+  request_chat_status: string
+  request_id?: number
+  chat?: chatType
+}
+
 const ListingsContent = () => {
-  const { marketListing: [marketListings, setMarketListings] } = React.useContext(AppContext)
+  const {
+    user: [peerId],
+    pathForDownload: [downloadPath]
+  } = React.useContext(AppContext)
+
+  const [marketListings, setMarketListings] = useState([])
+  const [discoveredFiles, setDiscoveredFiles] = useState<listingType[]>([])
   const [searchTerm, setSearchTerm] = useState('')
-  const [displayedListings, setDisplayedListings] = useState<ListingType[]>([]) 
+  const [displayedListings, setDisplayedListings] = useState<listingType[]>([])
   const [sortBy, setSortBy] = useState('lowest_price')
   const [showSortOptions, setShowSortOptions] = useState(false)
 
   const [isChatOpen, setIsChatOpen] = useState(false)
 
-  const handleChatOpen = () => {
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const data = await discoverFiles()
+        let arr: listingType[] = data
+          .flatMap((discover: discoverType) =>
+            discover.providers.map((provider: providerType) => ({
+              size: discover.size,
+              data_cid: discover.data_cid,
+              peer_id: provider.peer_id,
+              price: provider.price,
+              file_name: provider.file_name,
+              wallet_address: provider.wallet_address,
+              request_chat_status: 'not yet'
+            }))
+          )
+          .filter((listing: listingType) => listing.peer_id !== peerId)
+        setDiscoveredFiles(arr)
+        setDisplayedListings(arr)
+      } catch (error) {
+        console.error('Error discovering all files on network: ', error)
+      }
+    }
+    fetchData()
+  }, [])
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      getOutgoingChatRequests()
+        .then((data) => {
+          const statusMap = new Map<number, string>()
+          data.forEach((request: requestType) => {
+            statusMap.set(request.request_id, request.status)
+          })
+          setDiscoveredFiles((prevList: listingType[]) =>
+            prevList.map((eachListing: listingType) => {
+              if (eachListing.request_id) {
+                const status = statusMap.get(eachListing.request_id)
+                if (status) {
+                  return {
+                    ...eachListing,
+                    request_chat_status: status
+                  }
+                }
+              }
+              return eachListing
+            })
+          )
+          setDisplayedListings((prevList: listingType[]) =>
+            prevList.map((eachListing: listingType) => {
+              if (eachListing.request_id) {
+                const status = statusMap.get(eachListing.request_id)
+                if (status) {
+                  return {
+                    ...eachListing,
+                    request_chat_status: status
+                  }
+                }
+              }
+              return eachListing
+            })
+          )
+        })
+        .catch((error) => {
+          console.error('Error getting outgoing chat requests: ', error)
+        })
+    }, 5000)
+
+    return () => clearInterval(interval)
+  }, [])
+
+  const handleChatOpen = (listing: listingType) => {
     setIsChatOpen(true)
   }
 
@@ -32,15 +153,52 @@ const ListingsContent = () => {
     setIsChatOpen(false)
   }
 
-  useEffect(() => {
-    setDisplayedListings(marketListings)
-  }, [marketListings])
+  const handleRequestChat = async (listing: listingType) => {
+    try {
+      const data = await sendChatRequest(listing.peer_id, listing.data_cid)
+
+      setDiscoveredFiles((prevList: listingType[]) =>
+        prevList.map((eachListing: listingType) => {
+          if (
+            eachListing.data_cid === listing.data_cid &&
+            eachListing.peer_id === listing.peer_id
+          ) {
+            return {
+              ...eachListing,
+              request_chat_status: 'pending',
+              request_id: data.request_id
+            }
+          }
+          return eachListing
+        })
+      )
+      setDisplayedListings((prevList: listingType[]) =>
+        prevList.map((eachListing: listingType) => {
+          if (
+            eachListing.data_cid === listing.data_cid &&
+            eachListing.peer_id === listing.peer_id
+          ) {
+            return {
+              ...eachListing,
+              request_chat_status: 'pending',
+              request_id: data.request_id
+            }
+          }
+          return eachListing
+        })
+      )
+    } catch (error) {
+      console.log('Error sending chat request: ', error)
+    }
+  }
+
+  // useEffect(() => {
+  //   setDisplayedListings(marketListings)
+  // }, [marketListings])
 
   const sortOptions = [
     { id: 'lowest_price', label: 'Lowest Price' },
-    { id: 'highest_price', label: 'Highest Price' },
-    { id: 'recent', label: 'Most Recent' },
-    { id: 'oldest', label: 'Oldest' },
+    { id: 'highest_price', label: 'Highest Price' }
   ]
 
   const getFileIcon = (fileName: string) => {
@@ -68,11 +226,12 @@ const ListingsContent = () => {
     e.preventDefault()
 
     if (searchTerm === '') {
-      setDisplayedListings(marketListings)
+      setDisplayedListings(discoveredFiles)
     } else {
-      const searchList = marketListings.filter((listing) => 
-        listing.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        listing.cid.toString().includes(searchTerm)
+      const searchList = marketListings.filter(
+        (listing: discoverType) =>
+          listing.providers[0].file_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          listing.data_cid.toString().includes(searchTerm)
       )
       setDisplayedListings(searchList)
     }
@@ -84,19 +243,29 @@ const ListingsContent = () => {
     const sortedListings = [...displayedListings]
     switch (option) {
       case 'lowest_price':
-        sortedListings.sort((a, b) => a.cost - b.cost)
+        sortedListings.sort((a, b) => a.price - b.price)
         break
       case 'highest_price':
-        sortedListings.sort((a, b) => b.cost - a.cost)
-        break
-      case 'recent':
-        sortedListings.sort((a, b) => new Date(b.endDate).getTime() - new Date(a.endDate).getTime())
-        break
-      case 'oldest':
-        sortedListings.sort((a, b) => new Date(a.endDate).getTime() - new Date(b.endDate).getTime())
+        sortedListings.sort((a, b) => b.price - a.price)
         break
     }
     setDisplayedListings(sortedListings)
+  }
+
+  const handleBuyFile = async (listing: listingType) => {
+    try {
+      const normalizedPath = downloadPath.endsWith('/') ? downloadPath : downloadPath + '/'
+      const data = await getFile(
+        listing.peer_id,
+        listing.data_cid,
+        normalizedPath + listing.file_name
+      )
+    } catch (error) {
+      console.log('Error downloading file: ', error)
+    }
+
+    try {
+    } catch (error) {}
   }
 
   return (
@@ -129,7 +298,7 @@ const ListingsContent = () => {
             onClick={() => setShowSortOptions(!showSortOptions)}
             className="bg-[#737fa3] hover:bg-[#7c85a3] text-white px-4 py-2 rounded-lg flex items-center gap-2"
           >
-            {sortOptions.find(opt => opt.id === sortBy)?.label}
+            {sortOptions.find((opt) => opt.id === sortBy)?.label}
             <ChevronDown className="w-4 h-4" />
           </button>
           {showSortOptions && (
@@ -151,54 +320,73 @@ const ListingsContent = () => {
       {/* Listings Table */}
       <div className="overflow-x-auto border border-gray-300 rounded-lg">
         <div className="flex items-center p-2 border-b border-gray-300">
-          <span className="flex-1 font-semibold text-left">File</span>
-          <span className="flex-1 font-semibold text-left">Cost</span>
-          <span className="flex-1 font-semibold text-left">End Date</span>
+          <span className="flex-[4.5] font-semibold text-left">File</span>
+          <span className="flex-1 font-semibold text-left">Cost (SWE)</span>
           <span className="flex-1 font-semibold text-left">Size</span>
           <span className="flex-1 font-semibold text-left">Action</span>
         </div>
       </div>
-        
-      {isChatOpen && <ChatMenu onClose={handleChatClose} otherUserName="Test"/>}
 
-      {displayedListings.map((listing, index) => (
+      {displayedListings.map((listing: listingType, index: number) => (
         <div
           key={index}
           className="flex items-center px-2 py-1 border-b border-gray-300 rounded-md"
         >
-          <div className="flex flex-1 items-center">
+          <div className="flex flex-[4.5] items-center">
             <div className="flex flex-col items-center justify-center h-full mr-5">
-              {getFileIcon(listing.name)}
+              {getFileIcon(listing.file_name)}
             </div>
             <div className="ml-2">
-              <span className="block font-semibold">{listing.name}</span>
-              <span className="block text-gray-500">{listing.cid}</span>
+              <span className="block font-semibold">{listing.file_name}</span>
+              <span className="block text-gray-500">{listing.data_cid}</span>
             </div>
           </div>
-          <span className="flex-1 text-left">{listing.cost} SWE</span>
-          <span className="flex-1 text-left">{listing.endDate}</span>
+          <span className="flex-1 text-left">{listing.price}</span>
           <span className="flex-1 text-left">
-            {listing.size.toLocaleString(undefined, {
+            {(listing.size / 1e6).toLocaleString(undefined, {
               minimumFractionDigits: 0,
-              maximumFractionDigits: 6
+              maximumFractionDigits: 4
             })}{' '}
             MB
           </span>
           <span className="flex-1">
             <button
+              onClick={() => handleBuyFile(listing)}
               className="bg-[#737fa3] hover:bg-[#7c85a3] text-white px-3 py-1 mr-5 rounded"
             >
-              {listing.type === 'auction' ? 'Bid' : 'Buy'}
+              Buy
             </button>
-            <button onClick={handleChatOpen} className="bg-[#737fa3] text-white px-3 py-1 rounded">
-              Chat
-            </button>
+            {listing.request_chat_status === 'not yet' ? (
+              <button
+                onClick={() => handleRequestChat(listing)}
+                className="bg-[#737fa3] text-white px-3 py-1 rounded"
+              >
+                Request Chat
+              </button>
+            ) : listing.request_chat_status === 'pending' ? (
+              <button className="bg-[#737fa3] text-white px-3 py-1 rounded">
+                Pending Chat Request
+              </button>
+            ) : listing.request_chat_status === 'declined' ? (
+              <button className="bg-[#737fa3] text-white px-3 py-1 rounded">
+                Request Declined
+              </button>
+            ) : (
+              <button
+                onClick={() => handleChatOpen(listing)}
+                className="bg-[#737fa3] text-white px-3 py-1 rounded"
+              >
+                Chat now
+              </button>
+            )}
           </span>
         </div>
       ))}
 
+      {isChatOpen && <ChatMenu onClose={handleChatClose} />}
+
       {/* Pagination */}
-      <div className="mt-4 flex justify-center gap-2">
+      {/* <div className="mt-4 flex justify-center gap-2">
         {[1, 2, 3, 4, 5].map((page) => (
           <button
             key={page}
@@ -207,7 +395,7 @@ const ListingsContent = () => {
             {page}
           </button>
         ))}
-      </div>
+      </div> */}
     </div>
   )
 }

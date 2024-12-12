@@ -45,10 +45,11 @@ function Upload(): JSX.Element {
 
   const [peerId] = user
   const [platform] = sysPlatform
-  const [numFiles, setNumFiles] = numUploadFiles
-  const [numBytes, setNumBytes] = numUploadBytes
 
   const [historyView, setHistoryView] = history
+
+  const [numFiles, setNumFiles] = useState<number>(0)
+  const [numBytes, setNumBytes] = useState<number>(0)
 
   const [uploadedFiles, setUploadedFiles] = useState([])
   const [filesToView, setFilesToView] = useState<fileType[]>([])
@@ -78,6 +79,8 @@ function Upload(): JSX.Element {
         const data = await getUploadedFiles()
         setUploadedFiles(data)
         setFilesToView(data)
+        setNumFiles(data.length)
+        setNumBytes(data.reduce((sum: number, file: fileType) => sum + file.size, 0))
       } catch (error) {
         console.error('Error fetching uploaded files: ', error)
       }
@@ -140,7 +143,7 @@ function Upload(): JSX.Element {
 
       let byteCount: number = 0
       let filesToAppend = filesArr.map((file) => {
-        byteCount += file.size / 1e6
+        byteCount += file.size
         let newFile: fileType = {
           size: file.size,
           price: 0,
@@ -160,7 +163,6 @@ function Upload(): JSX.Element {
   }
 
   const handleCostConfirm = async (fileQueue: fileType[]) => {
-    setLoading(true)
     setNumBytes(byteCount)
     setNumFiles(fileCount)
     await Promise.all(
@@ -173,7 +175,6 @@ function Upload(): JSX.Element {
       })
     )
     setFilesToView((prevList) => prevList.concat(fileQueue))
-    setLoading(false)
     setShowCostModal(false)
   }
 
@@ -222,9 +223,9 @@ function Upload(): JSX.Element {
             <div className="flex-1 text-center">
               <h3 className="font-bold">Total Bytes</h3>
               <p className="text-lg">
-                {Math.round(numBytes * 1e6) / 1e6 === 0
+                {Math.round(numBytes / 1e6) === 0
                   ? '0 MB'
-                  : numBytes.toLocaleString(undefined, {
+                  : (numBytes / 1e6).toLocaleString(undefined, {
                       minimumFractionDigits: 0,
                       maximumFractionDigits: 4
                     }) + ' MB'}
@@ -306,7 +307,7 @@ function Upload(): JSX.Element {
             <span className="flex-1 text-left">
               {(file.size / 1e6).toLocaleString(undefined, {
                 minimumFractionDigits: 0,
-                maximumFractionDigits: 6
+                maximumFractionDigits: 4
               })}{' '}
               MB
             </span>
@@ -419,7 +420,6 @@ function Upload(): JSX.Element {
           </div>
         )}
       </div>
-      <LoadingModal isVisible={loading} />
     </div>
   )
 }

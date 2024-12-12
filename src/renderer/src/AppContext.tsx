@@ -1,4 +1,4 @@
-import { useState, createContext, useEffect } from 'react'
+import { useState, createContext, useEffect, useMemo } from 'react'
 
 type fileType = {
   cid: number
@@ -26,16 +26,6 @@ type downloadType = {
   // 'Downloading' | 'Paused' | 'Done' | 'Error'
 }
 
-type ListingType = {
-  cid: number
-  name: string
-  size: number
-  cost: number
-  endDate: string
-  type: 'sale' | 'auction'
-  status: 'active' | 'ended'
-}
-
 type proxyType = {
   ip: string
   location: string
@@ -56,9 +46,6 @@ const AppProvider = ({ children }) => {
 
   const [walletAddress, setWalletAddress] = useState<string>('')
 
-  const [numUploadedFiles, setNumUploadedFiles] = useState<number>(0)
-  const [numUploadedBytes, setNumUploadedBytes] = useState<number>(0)
-
   const [downloadingFiles, setDownloadingFiles] = useState<downloadType[]>([])
 
   const [currProxy, setCurrProxy] = useState<proxyType | null>(null)
@@ -67,9 +54,6 @@ const AppProvider = ({ children }) => {
   const [walletBalance, setWalletBalance] = useState<number>(0)
 
   const [historyView, setHistoryView] = useState<historyType[]>()
-
-  const [marketListings, setMarketListings] = useState<ListingType[]>([])
-  const [userMarketListings, setUserMarketListings] = useState<ListingType[]>([])
 
   const [platform, setPlatform] = useState<string>('')
   const [downloadPath, setDownloadPath] = useState<string>('')
@@ -110,26 +94,30 @@ const AppProvider = ({ children }) => {
     // })
   }, [])
 
-  return (
-    <AppContext.Provider
-      value={{
-        user: [peerId, setPeerId],
-        sysPlatform: [platform, setPlatform],
-        pathForDownload: [downloadPath, setDownloadPath],
-        numUploadFiles: [numUploadedFiles, setNumUploadedFiles],
-        numUploadBytes: [numUploadedBytes, setNumUploadedBytes],
-        filesDownloading: [downloadingFiles, setDownloadingFiles],
-        proxy: [currProxy, setCurrProxy],
-        proxies: [listOfProxies, setListOfProxies],
-        balance: [walletBalance, setWalletBalance],
-        history: [historyView, setHistoryView],
-        marketListing: [marketListings, setMarketListings],
-        userListing: [userMarketListings, setUserMarketListings]
-      }}
-    >
-      {children}
-    </AppContext.Provider>
+  const contextValue = useMemo(
+    () => ({
+      user: [peerId, setPeerId],
+      sysPlatform: [platform, setPlatform],
+      pathForDownload: [downloadPath, setDownloadPath],
+      filesDownloading: [downloadingFiles, setDownloadingFiles],
+      proxy: [currProxy, setCurrProxy],
+      proxies: [listOfProxies, setListOfProxies],
+      balance: [walletBalance, setWalletBalance],
+      history: [historyView, setHistoryView]
+    }),
+    [
+      peerId,
+      platform,
+      downloadPath,
+      downloadingFiles,
+      currProxy,
+      listOfProxies,
+      walletBalance,
+      historyView
+    ]
   )
+
+  return <AppContext.Provider value={contextValue}>{children}</AppContext.Provider>
 }
 
 export { AppContext, AppProvider }

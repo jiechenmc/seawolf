@@ -79,29 +79,33 @@ function Download(): JSX.Element {
   //   fetchData()
   // }, [])
 
-  const downloadsRef = useRef(downloadingFiles)
-
-  useEffect(() => {
-    downloadsRef.current = downloadingFiles // Keep ref updated with the latest state
-  }, [downloadingFiles])
-
   useEffect(() => {
     const interval = setInterval(() => {
-      downloadsRef.current.forEach(async (file: downloadType) => {
-        if (file.download_status === 'Downloading') {
-          const data = await getSessionInfo(file.session_id)
-          file.download_progress = data.rx_bytes
-          file.size = data.total_bytes
-          if (data.paused) {
-            file.download_status = 'Paused'
-          } else if (data.is_complete) {
-            file.download_status = 'Done'
-          } else if (data.result) {
-            file.download_status = 'Error'
+      setDownloadingFiles((prevFiles: downloadType[]) =>
+        prevFiles.map((file) => {
+          if (file.download_status === 'Downloading') {
+            getSessionInfo(file.session_id).then((data) => {
+              const updatedFile = {
+                ...file,
+                download_progress: data.rx_bytes,
+                size: data.total_bytes,
+                download_status: data.paused
+                  ? 'Paused'
+                  : data.is_complete
+                    ? 'Done'
+                    : data.result
+                      ? 'Error'
+                      : file.download_status
+              }
+              setDownloadingFiles((prevFiles: downloadType[]) =>
+                prevFiles.map((f) => (f.session_id === file.session_id ? updatedFile : f))
+              )
+            })
           }
-        }
-      })
-    }, 4000)
+          return file
+        })
+      )
+    }, 3000)
 
     return () => clearInterval(interval)
   }, [])
@@ -126,7 +130,6 @@ function Download(): JSX.Element {
       let data_cid = providers?.data_cid || ''
       const normalizedPath = downloadPath.endsWith('/') ? downloadPath : downloadPath + '/'
       const data = await getFile(provider.peer_id, data_cid, normalizedPath + provider.file_name)
-      console.log('session id is ', data)
       let newFile = {
         size: providers?.size || 0,
         price: provider.price,
@@ -142,12 +145,18 @@ function Download(): JSX.Element {
       console.log('Error downloading file: ', error)
     }
     setShowProviders(false)
+    setSearchHash('')
   }
 
   const handlePausePlay = async (file: downloadType) => {
     if (file.download_status === 'Downloading') {
       try {
         await pauseDownload(file.session_id)
+        setDownloadingFiles((prevList: downloadType[]) => {
+          prevList.map((thisFile) => {
+            thisFile.data_cid === file.data_cid
+          })
+        })
         file.download_status = 'Paused'
       } catch (error) {
         console.log('Error pausing download: ', error)
@@ -216,7 +225,7 @@ function Download(): JSX.Element {
         <h2 className="text-xl font-semibold mb-2">Downloaded Files</h2>
         <div className="overflow-x-auto border border-gray-300 rounded-lg">
           <div className="flex items-center p-2 border-b border-gray-300">
-            <span className="flex-[4] font-semibold">File</span>
+            <span className="flex-[4.5] font-semibold">File</span>
             <span className="flex-1 font-semibold">Bytes (MB)</span>
             <span className="flex-1 font-semibold">Cost (SWE)</span>
             <span className="flex-1 font-semibold">Progress</span>
@@ -228,7 +237,7 @@ function Download(): JSX.Element {
             key={index}
             className="flex items-center px-2 py-1 border-b border-gray-300 rounded-md"
           >
-            <div className="flex-[4]">
+            <div className="flex-[4.5]">
               <div>
                 <span className="block font-semibold">
                   {file.file_name.length > 60
@@ -239,7 +248,7 @@ function Download(): JSX.Element {
               </div>
             </div>
             <span className="flex-1 ">
-              {file.size.toLocaleString(undefined, {
+              {(file.size / 1e6).toLocaleString(undefined, {
                 minimumFractionDigits: 0,
                 maximumFractionDigits: 6
               })}
@@ -248,8 +257,10 @@ function Download(): JSX.Element {
             <span className="flex-1 ">
               {file.download_status !== 'Done' ? `${file.download_progress} / ${file.size}` : ''}
             </span>
-            <span className="flex-1 text-left flex justify-between items-center">
-              <span>{file.download_status}</span>
+            <span className="flex-1 flex justify-between items-center">
+              <span style={{ color: file.download_status === 'Done' ? 'green' : 'black' }}>
+                {file.download_status}
+              </span>
               <div className="flex items-center ml-auto space-x-4">
                 {file.download_status === 'Downloading' && (
                   <button
@@ -267,14 +278,14 @@ function Download(): JSX.Element {
                     <FaRegPlayCircle />
                   </button>
                 )}
-                {file.download_status !== 'Done' && (
+                {/* {file.download_status !== 'Done' && (
                   <button
                     onClick={() => handleCancelDownload(file, index)}
                     className="text-red-500 hover:text-red-700"
                   >
                     <FaRegTrashAlt />
                   </button>
-                )}
+                )} */}
               </div>
             </span>
           </div>
