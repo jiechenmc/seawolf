@@ -16,8 +16,8 @@ import (
 )
 
 const chatProtocol = "/orcanet/p2p/seawolf/chat"
-const chatRequestTimeout = time.Second * 120
-const chatIdleTimeout = time.Second * 60 * 10
+const chatRequestTimeout = time.Minute * 10
+const chatIdleTimeout = time.Minute * 10
 
 //Chat room statuses
 const (
