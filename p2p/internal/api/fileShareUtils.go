@@ -30,7 +30,6 @@ const fileShareOpenStreamTimeout = time.Second * 1
 const fileShareIdleTimeout = time.Second * 60
 const fileShareDirectory = "fileshare"
 const fileShareUploadsDirectory = "fileshare/uploads"
-const fileShareDownloadsDirectory = "fileshare/downloads"
 
 var nextSessionIDLock sync.Mutex
 var nextSessionID = 0
@@ -1060,6 +1059,9 @@ func (f *FileShareNode) GetFile(ctx context.Context, providerIDStr string, reqCi
         log.Printf("Failed to resolve filepath. %v\n", outputFile)
         return -1, invalidParams
     }
+    // Ensure download directory exists
+    dir := filepath.Dir(tmpOutputFile)
+    os.MkdirAll(dir, 0751)
 
     //Open temporary file
     file, err := os.Create(tmpOutputFile)
