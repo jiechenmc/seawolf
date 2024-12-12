@@ -9,12 +9,6 @@ type Proxy = {
   cost: number
 }
 
-const testList: Proxy[] = [
-  { ip: '192.168.1.1', location: 'New York, USA', cost: 10 },
-  { ip: '192.168.1.2', location: 'London, UK', cost: 12 },
-  { ip: '192.168.1.3', location: 'Tokyo, Japan', cost: 8 }
-]
-
 function Proxy(): JSX.Element {
   // const [currProxy, setCurrProxy] = useState<Proxy | null>(null)
   // const [listOfProxies, setListOfProxies] = useState<Proxy[]>(testList)
@@ -24,6 +18,7 @@ function Proxy(): JSX.Element {
 
   const [serveAsProxy, setServeAsProxy] = useState(false)
 
+  console.log('list proxies', listOfProxies)
   const handleChooseProxy = (proxy: Proxy) => {
     const isConfirmed = window.confirm(`Are you sure you want to connect to IP: ${proxy.ip}?`)
 

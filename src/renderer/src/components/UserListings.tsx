@@ -12,6 +12,7 @@ import {
   finishChat,
   getIncomingChatRequests
 } from '@renderer/rpcUtils'
+import LoadingModal from './LoadingModal'
 
 type listingType = {
   size: number
@@ -75,6 +76,8 @@ const UserListings = () => {
 
   const [currentChat, setCurrentChat] = useState<chatType>()
 
+  const [loading, setLoading] = useState<boolean>(false)
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -93,10 +96,12 @@ const UserListings = () => {
           .filter((listing: listingType) => listing.peer_id === peerId)
         setDiscoveredFiles(arr)
         setDisplayedListings(arr)
+        setLoading(false)
       } catch (error) {
         console.error('Error discovering all files on network: ', error)
       }
     }
+    setLoading(true)
     fetchData()
   }, [])
 
@@ -445,6 +450,7 @@ const UserListings = () => {
         </div>
       )}
       {isChatOpen && <ChatMenu onClose={handleChatClose} chat={currentChat} />}
+      <LoadingModal isVisible={loading} />
     </div>
   )
 }

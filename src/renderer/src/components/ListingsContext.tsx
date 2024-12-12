@@ -12,6 +12,7 @@ import {
   getOutgoingChatRequests,
   sendChatRequest
 } from '@renderer/rpcUtils'
+import LoadingModal from './LoadingModal'
 
 type providerType = {
   peer_id: string
@@ -76,6 +77,8 @@ const ListingsContent = () => {
   const [isChatOpen, setIsChatOpen] = useState(false)
   const [currentChat, setCurrentChat] = useState<chatType>()
 
+  const [loading, setLoading] = useState<boolean>(false)
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -95,7 +98,6 @@ const ListingsContent = () => {
           })
         })
 
-        console.log('status map, ', statusMap)
         let arr: listingType[] = await Promise.all(
           data.flatMap((discover: discoverType) =>
             discover.providers.map(async (provider: providerType) => {
@@ -137,10 +139,12 @@ const ListingsContent = () => {
         arr = arr.filter((listing: listingType) => listing.peer_id !== peerId)
         setDiscoveredFiles(arr)
         setDisplayedListings(arr)
+        setLoading(false)
       } catch (error) {
         console.error('Error discovering all files on network: ', error)
       }
     }
+    setLoading(true)
     fetchData()
   }, [])
 
@@ -461,6 +465,7 @@ const ListingsContent = () => {
           </button>
         ))}
       </div> */}
+      <LoadingModal isVisible={loading} />
     </div>
   )
 }

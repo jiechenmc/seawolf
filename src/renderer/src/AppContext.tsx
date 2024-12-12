@@ -49,7 +49,7 @@ const AppProvider = ({ children }) => {
   const [downloadingFiles, setDownloadingFiles] = useState<downloadType[]>([])
 
   const [currProxy, setCurrProxy] = useState<proxyType | null>(null)
-  const [listOfProxies, setListOfProxies] = useState<proxyType[]>()
+  const [listOfProxies, setListOfProxies] = useState<proxyType[]>([])
 
   const [walletBalance, setWalletBalance] = useState<number>(0)
 
