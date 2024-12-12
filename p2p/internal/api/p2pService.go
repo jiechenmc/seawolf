@@ -195,6 +195,7 @@ func (s *P2PService) Logout() (string, error) {
 		return "", notLoggedIn
 	}
 	(*s.p2pHost).Close()
+	s.proxyNode.Close()
 	s.username = nil
 	s.fsNode = nil
 	s.p2pHost = nil

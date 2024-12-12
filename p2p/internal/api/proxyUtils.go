@@ -37,6 +37,7 @@ type ProxyNode struct {
 	clients     map[peer.ID]bool
 	bytesRx     int64
 	bytesTx     int64
+	listener    *net.Listener
 }
 
 type BytesTransferred struct {
@@ -67,13 +68,14 @@ func (pn *ProxyNode) startTCPListener() error {
         log.Printf("Failed to start TCP listener: %v", err)
         return internalError
     }
+    pn.listener = &listener
     go func() {
 		defer listener.Close()
 		for {
 			conn, err := listener.Accept()
 			if err != nil {
 				log.Printf("Failed to accept connection: %v", err)
-				continue
+				break
 			}
 			pn.proxyLock.Lock()
 			if pn.connected {
@@ -376,4 +378,11 @@ func (pn *ProxyNode) GetAllProxies(ctx context.Context) ([]ProxyStatus, error) {
 		}
 	}
 	return proxies, nil
+}
+
+func (pn *ProxyNode) Close() {
+    if pn.listener != nil {
+        (*pn.listener).Close()
+        pn.listener = nil
+    }
 }
