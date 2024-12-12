@@ -23,9 +23,10 @@ function ProxyComponent(): JSX.Element {
     const [serveAsProxy, setServeAsProxy] = useState(false)
     const [walletAddress, setWalletAddress] = useState('')
     const [price, setPrice] = useState(0)
-    const [loading] = useState<boolean>(false)
+    const [loading, setLoading] = useState<boolean>(false)
 
     useEffect(() => {
+        setLoading(true)
         fetch("http://localhost:8080/account", {
             method: "POST",
             headers: {
@@ -36,6 +37,7 @@ function ProxyComponent(): JSX.Element {
         ).then(async (r) => {
             const data = await r.json()
             setWalletAddress(data.message)
+            setLoading(false)
         })
     }, [])
 
