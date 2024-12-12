@@ -1,5 +1,10 @@
 # Seawolf Exchange
 
+### Prerequisites
+
+- See https://go.dev/doc/install to install `Go` 
+- See https://docs.docker.com/engine/install/ to install `Docker` and its `docker-compose-plugin`. We are using Ubuntu and used this guide: https://docs.docker.com/engine/install/ubuntu/.
+
 
 ### Running the Electron App
 
@@ -9,7 +14,6 @@ $ npm install && npm run dev
 
 The following steps assume you are on a `Linux/Unix` like system and you have `Go` and `Docker` installed and that you are at the root of the project. 
 
-Please see https://go.dev/doc/install to install `Go` and https://docs.docker.com/engine/install/ to install `Docker`.
 
 ### Running BTCD and BTCWALLET
 
