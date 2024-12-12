@@ -320,7 +320,7 @@ func (pn *ProxyNode) RegisterAsProxy(ctx context.Context, price float64, walletA
 		return err
 	}
 
-	return pn.kadDHT.PutValue(ctx, "/proxies/"+pn.host.ID().String(), statusBytes)
+	return pn.kadDHT.PutValue(ctx, "/orcanet/proxies/"+pn.host.ID().String(), statusBytes)
 }
 
 func (pn *ProxyNode) UnregisterAsProxy(ctx context.Context) error {
@@ -340,7 +340,7 @@ func (pn *ProxyNode) UnregisterAsProxy(ctx context.Context) error {
 		return err
 	}
 
-	err = pn.kadDHT.PutValue(ctx, "/proxies/"+peerID, statusBytes)
+	err = pn.kadDHT.PutValue(ctx, "/orcanet/proxies/"+peerID, statusBytes)
 	if err != nil {
 		log.Printf("Error unregistering as proxy: %v\n", err)
 		return err
@@ -361,7 +361,7 @@ func (pn *ProxyNode) GetAllProxies(ctx context.Context) ([]ProxyStatus, error) {
 	pn.proxies = make(map[peer.ID]ProxyStatus)
 	var proxies []ProxyStatus
 	for _, key := range pn.kadDHT.RoutingTable().ListPeers() {
-		value, err := pn.kadDHT.GetValue(ctx, "/proxies/"+key.String())
+		value, err := pn.kadDHT.GetValue(ctx, "/orcanet/proxies/"+key.String())
 		if err == nil {
 			var status ProxyStatus
 			err = json.Unmarshal(value, &status)
