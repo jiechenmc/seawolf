@@ -37,3 +37,8 @@ The SOCKS5 proxy will be ran in a container in the setup by `bootstrap.sh` and t
 ```
 
 Please rerun `./p2p/seawolf_p2p` for each user and for each session. So if you reopen the electron app on the same device, you need to restart the p2p backend. Please also delete the `seawolf_p2p.db` file if you plan on registering/logging in as the same user.
+
+
+##### Downloading Files
+
+The files will be downloaded to the current working directory at `./downloads`.
