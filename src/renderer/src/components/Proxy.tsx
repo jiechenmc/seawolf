@@ -25,6 +25,7 @@ function ProxyComponent(): JSX.Element {
   const [price, setPrice] = useState(0)
   const [loading, setLoading] = useState<boolean>(false)
 
+<<<<<<< Updated upstream
   useEffect(() => {
     setLoading(true)
     fetch('http://localhost:8080/account', {
@@ -47,6 +48,65 @@ function ProxyComponent(): JSX.Element {
         const lmfao = await discoverFiles()
         if (lmfao) {
           console.log('lmfao')
+=======
+    useEffect(() => {
+        fetch("http://localhost:8080/account", {
+            method: "POST",
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ account: "default" })
+        }
+        ).then(async (r) => {
+            const data = await r.json()
+            setWalletAddress(data.message)
+
+        })
+    }, [])
+
+
+    useEffect(() => {
+        setLoading(true)
+        // Fetch the list of proxies from the backend
+        const fetchProxies = async (): Promise<void> => {
+            try {
+                const lmfao = await discoverFiles()
+                if (lmfao) {
+                    console.log("lmfao")
+                }
+                const proxies = await getAllProxies()
+                setListOfProxies(proxies)
+            } catch (error) {
+                console.error('Failed to fetch proxies:', error)
+            }
+        }
+
+        fetchProxies()
+
+        setLoading(false)
+    }, [setListOfProxies])
+
+    const handleChooseProxy = async (proxy: Proxy): Promise<void> => {
+        if (proxy.peer_id === currProxy?.peer_id) {
+            window.alert("You are a proxy yourself and cannot connect to a proxy.")
+        } else if (!currProxy) {
+            const isConfirmed = window.confirm(
+                `Are you sure you want to connect to peer ID: ${proxy.peer_id}?`
+            )
+
+            if (isConfirmed) {
+                try {
+                    await connectToProxy(proxy.peer_id)
+                    setCurrProxy(proxy)
+                } catch (error) {
+                    console.error('Failed to connect to proxy:', error)
+                }
+            }
+            console.log(proxy)
+        }
+        else {
+            window.alert("You are already connected to a proxy.")
+>>>>>>> Stashed changes
         }
         const proxies = await getAllProxies()
         setListOfProxies(proxies)
