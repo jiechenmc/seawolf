@@ -26,7 +26,6 @@ function ProxyComponent(): JSX.Element {
     const [loading, setLoading] = useState<boolean>(false)
 
     useEffect(() => {
-        setLoading(true)
         fetch("http://localhost:8080/account", {
             method: "POST",
             headers: {
@@ -37,12 +36,13 @@ function ProxyComponent(): JSX.Element {
         ).then(async (r) => {
             const data = await r.json()
             setWalletAddress(data.message)
-            setLoading(false)
+
         })
     }, [])
 
 
     useEffect(() => {
+        setLoading(true)
         // Fetch the list of proxies from the backend
         const fetchProxies = async (): Promise<void> => {
             try {
@@ -58,22 +58,32 @@ function ProxyComponent(): JSX.Element {
         }
 
         fetchProxies()
+
+        setLoading(false)
     }, [setListOfProxies])
 
     const handleChooseProxy = async (proxy: Proxy): Promise<void> => {
-        const isConfirmed = window.confirm(
-            `Are you sure you want to connect to peer ID: ${proxy.peer_id}?`
-        )
+        if (!currProxy) {
+            const isConfirmed = window.confirm(
+                `Are you sure you want to connect to peer ID: ${proxy.peer_id}?`
+            )
 
-        if (isConfirmed) {
-            try {
-                await connectToProxy(proxy.peer_id)
-                setCurrProxy(proxy)
-            } catch (error) {
-                console.error('Failed to connect to proxy:', error)
+            if (isConfirmed) {
+                try {
+                    await connectToProxy(proxy.peer_id)
+                    setCurrProxy(proxy)
+                } catch (error) {
+                    console.error('Failed to connect to proxy:', error)
+                }
             }
+            console.log(proxy)
         }
-        console.log(proxy)
+        else if (serveAsProxy) {
+            window.alert("You are a proxy yourself and cannot connect to a proxy.")
+        }
+        else {
+            window.alert("You are already connected to a proxy.")
+        }
     }
 
     const handleRemoveProxy = async (): Promise<void> => {
@@ -87,6 +97,7 @@ function ProxyComponent(): JSX.Element {
                     await disconnectFromProxy()
                     const bytes = await getProxyBytes(currProxy.peer_id)
                     const totalBytes = bytes.rx_bytes + bytes.tx_bytes
+                    alert(`You have transferred ${totalBytes} bytes. You will be charged ${totalBytes * currProxy.price / 1024.0 / 1024.0} SWE.`)
                     tranferMoney(currProxy.wallet_address, totalBytes * currProxy.price / 1024.0 / 1024.0)
                     setCurrProxy(null)
                 } catch (error) {
@@ -99,8 +110,8 @@ function ProxyComponent(): JSX.Element {
     const handleToggle = async (): Promise<void> => {
         if (!serveAsProxy) {
             // Register as proxy
-            if (!walletAddress || !price) {
-                alert('Please enter a valid wallet address and price.')
+            if (!price) {
+                alert('Please enter a valid price greater than 0.')
                 return
             }
             try {
@@ -201,14 +212,16 @@ function ProxyComponent(): JSX.Element {
                         <LoadingModal isVisible={loading} />
                         {listOfProxies && listOfProxies.length > 0 ? (
                             listOfProxies.map((proxy: Proxy, index: number) => (
-                                <button
-                                    key={index}
-                                    onClick={() => handleChooseProxy(proxy)}
-                                    className="flex items-center p-2 w-full hover:bg-gray-200 border-b border-gray-300"
-                                >
-                                    <span className="flex-1 text-left">{proxy.peer_id}</span>
-                                    <span className="flex-1 text-left">{proxy.price} SWE</span>
-                                </button>
+                                proxy.peer_id === currProxy?.peer_id ? null : (
+                                    <button
+                                        key={index}
+                                        onClick={() => handleChooseProxy(proxy)}
+                                        className="flex items-center p-2 w-full hover:bg-gray-200 border-b border-gray-300"
+                                    >
+                                        <span className="flex-1 text-left">{proxy.peer_id}</span>
+                                        <span className="flex-1 text-left">   || {proxy.price} SWE</span>
+                                    </button>
+                                )
                             ))
                         ) : (
                             <p className="text-center p-4">No proxies available.</p>
