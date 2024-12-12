@@ -283,6 +283,7 @@ fileCid:    string - CID of the file
 #### Returns
 ```
 {
+    "chat_id":      int     - chat ID if accepted
     "request_id":   int     - request ID
     "peer_id":      string  - peer ID of the provider
     "file_cid":     string  - CID of the file
@@ -321,6 +322,7 @@ None
 ```
 [
     {
+        "chat_id":      int     - chat ID if accepted
         "request_id":   int     - request ID
         "peer_id":      string  - peer ID of the provider
         "file_cid":     string  - CID of the file
