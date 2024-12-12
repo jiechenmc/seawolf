@@ -1,5 +1,30 @@
 const PORT = 8081
 
+export async function setWalletAddr(id: number = 1, walletAddress: string): Promise<void> {
+  const request = {
+    jsonrpc: '2.0',
+    id: id,
+    method: 'p2p_setWalletAddress',
+    params: [walletAddress]
+  }
+
+  const response = await fetch(`http://localhost:${PORT}/rpc`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(request)
+  })
+
+  const data = await response.json()
+
+  if (data.error) {
+    throw new Error(data.error.message)
+  }
+
+  return data.result
+}
+
 export interface Proxy {
   peer_id: string
   is_proxy: boolean

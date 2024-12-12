@@ -9,8 +9,11 @@ import {
     connectToProxy,
     disconnectFromProxy,
     registerAsProxy,
-    unregisterAsProxy
+    unregisterAsProxy,
+    getProxyBytes,
+    discoverFiles
 } from '../rpcUtils'
+import { tranferMoney } from '@renderer/walletUtils'
 
 function ProxyComponent(): JSX.Element {
     const { proxy, proxies } = useContext(AppContext)
@@ -20,12 +23,33 @@ function ProxyComponent(): JSX.Element {
     const [serveAsProxy, setServeAsProxy] = useState(false)
     const [walletAddress, setWalletAddress] = useState('')
     const [price, setPrice] = useState(0)
-    const [loading] = useState<boolean>(false)
+    const [loading, setLoading] = useState<boolean>(false)
+
+    useEffect(() => {
+        setLoading(true)
+        fetch("http://localhost:8080/account", {
+            method: "POST",
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ account: "default" })
+        }
+        ).then(async (r) => {
+            const data = await r.json()
+            setWalletAddress(data.message)
+            setLoading(false)
+        })
+    }, [])
+
 
     useEffect(() => {
         // Fetch the list of proxies from the backend
         const fetchProxies = async (): Promise<void> => {
             try {
+                const lmfao = await discoverFiles()
+                if (lmfao) {
+                    console.log("lmfao")
+                }
                 const proxies = await getAllProxies()
                 setListOfProxies(proxies)
             } catch (error) {
@@ -49,6 +73,7 @@ function ProxyComponent(): JSX.Element {
                 console.error('Failed to connect to proxy:', error)
             }
         }
+        console.log(proxy)
     }
 
     const handleRemoveProxy = async (): Promise<void> => {
@@ -60,6 +85,9 @@ function ProxyComponent(): JSX.Element {
             if (isConfirmed) {
                 try {
                     await disconnectFromProxy()
+                    const bytes = await getProxyBytes(currProxy.peer_id)
+                    const totalBytes = bytes.rx_bytes + bytes.tx_bytes
+                    tranferMoney(currProxy.wallet_address, totalBytes * currProxy.price / 1024.0 / 1024.0)
                     setCurrProxy(null)
                 } catch (error) {
                     console.error('Failed to disconnect from proxy:', error)
@@ -107,13 +135,13 @@ function ProxyComponent(): JSX.Element {
 
                     {!serveAsProxy && (
                         <div className="mb-4">
-                            <label className="block text-gray-700">Wallet Address:</label>
+                            {/* <label className="block text-gray-700">Wallet Address:</label>
                             <input
                                 type="text"
                                 value={walletAddress}
                                 onChange={(e) => setWalletAddress(e.target.value)}
                                 className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
-                            />
+                            /> */}
                             <label className="block text-gray-700 mt-4">Price (SWE per MB):</label>
                             <input
                                 type="number"
