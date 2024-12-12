@@ -394,7 +394,7 @@ func (s *P2PService) SendMessage(peerID string, chatID int, text string) (*Messa
 	return s.chatNode.SendMessage(peerID, chatID, text)
 }
 
-func (s *P2PService) GetIncomingChatRequests() ([]*ChatRequest, error) {
+func (s *P2PService) GetIncomingChatRequests() ([]ChatRequest, error) {
 	if s.username == nil || s.chatNode == nil {
 		log.Printf("Attempted to get incoming chat requests when not logged in\n")
 		return nil, notLoggedIn
@@ -402,7 +402,7 @@ func (s *P2PService) GetIncomingChatRequests() ([]*ChatRequest, error) {
 	return s.chatNode.GetIncomingRequests(), nil
 }
 
-func (s *P2PService) GetOutgoingChatRequests() ([]*ChatRequest, error) {
+func (s *P2PService) GetOutgoingChatRequests() ([]OutgoingChatRequest, error) {
 	if s.username == nil || s.chatNode == nil {
 		log.Printf("Attempted to get outgoing chat requests when not logged in\n")
 		return nil, notLoggedIn
@@ -410,7 +410,7 @@ func (s *P2PService) GetOutgoingChatRequests() ([]*ChatRequest, error) {
 	return s.chatNode.GetOutgoingRequests(), nil
 }
 
-func (s *P2PService) SendChatRequest(peerID string, fileCid string) (*ChatRequest, error) {
+func (s *P2PService) SendChatRequest(peerID string, fileCid string) (*OutgoingChatRequest, error) {
 	if s.username == nil || s.chatNode == nil {
 		log.Printf("Attempted to get send chat request when not logged in\n")
 		return nil, notLoggedIn

@@ -49,6 +49,11 @@ type ChatRequest struct {
     stream *P2PStream
 }
 
+type OutgoingChatRequest struct {
+    ChatRequest
+    ChatID int          `json:"chat_id"`
+}
+
 type ChatRoom struct {
     ChatID int          `json:"chat_id"`
     Buyer peer.ID       `json:"buyer"`
@@ -67,7 +72,7 @@ type ChatNode struct {
     fsNode *FileShareNode
     chats map[peer.ID]map[int]*ChatRoom
     chatsLock sync.Mutex
-    outgoingRequests map[int]*ChatRequest
+    outgoingRequests map[int]*OutgoingChatRequest
     outgoingRequestsLock sync.Mutex
     incomingRequests map[peer.ID]map[int]*ChatRequest
     incomingRequestsLock sync.Mutex
@@ -80,7 +85,7 @@ func ChatNodeCreate(hostNode host.Host, kadDHT *dht.IpfsDHT, fsNode *FileShareNo
         kadDHT: kadDHT,
         fsNode: fsNode,
         chats: make(map[peer.ID]map[int]*ChatRoom),
-        outgoingRequests: make(map[int]*ChatRequest),
+        outgoingRequests: make(map[int]*OutgoingChatRequest),
         incomingRequests: make(map[peer.ID]map[int]*ChatRequest),
         currChatID: 0,
     }
@@ -219,7 +224,7 @@ func (cn *ChatNode) AcceptRequest(peerIDStr string, reqID int) (*ChatRoom, error
     return nil, requestNotFound
 }
 
-func (cn *ChatNode) SendRequest(ctx context.Context, providerIDStr string, fileCidStr string) (*ChatRequest, error) {
+func (cn *ChatNode) SendRequest(ctx context.Context, providerIDStr string, fileCidStr string) (*OutgoingChatRequest, error) {
     fileCid, err := cid.Decode(fileCidStr)
     if err != nil {
         log.Printf("Failed to decode cid %v. %v\n", fileCidStr, err)
@@ -264,14 +269,14 @@ func (cn *ChatNode) SendRequest(ctx context.Context, providerIDStr string, fileC
             if err != nil {
                 goto declined
             }
-            cn.ResolveOutgoingRequest(currChatID, ACCEPTED)
+            cn.ResolveOutgoingRequest(currChatID, respChatID, ACCEPTED)
             cn.CreateChatRoom(respChatID, cn.host.ID(), providerID, fileCid, stream)
             return
         } else {
             goto declined
         }
 declined:
-        cn.ResolveOutgoingRequest(currChatID, DECLINED)
+        cn.ResolveOutgoingRequest(currChatID, -1, DECLINED)
     }(cn.currChatID)
     cn.currChatID++
     return request, nil
@@ -434,14 +439,17 @@ func (cn *ChatNode) CreateChatRoom(id int, buyer peer.ID, seller peer.ID, fileCi
     return chatRoom
 }
 
-func (cn *ChatNode) CreateOutgoingRequest(id int, fileCid cid.Cid, p2pStream *P2PStream) *ChatRequest {
-    request := &ChatRequest{
-        RequestID: id,
-        PeerID: p2pStream.RemotePeerID,
-        fileCid: fileCid,
-        FileCidStr: fileCid.String(),
-        Status: PENDING,
-        stream: p2pStream,
+func (cn *ChatNode) CreateOutgoingRequest(id int, fileCid cid.Cid, p2pStream *P2PStream) *OutgoingChatRequest {
+    request := &OutgoingChatRequest{
+        ChatRequest {
+            RequestID: id,
+            PeerID: p2pStream.RemotePeerID,
+            fileCid: fileCid,
+            FileCidStr: fileCid.String(),
+            Status: PENDING,
+            stream: p2pStream,
+        },
+        -1,
     }
     cn.outgoingRequestsLock.Lock()
     defer cn.outgoingRequestsLock.Unlock()
@@ -449,11 +457,12 @@ func (cn *ChatNode) CreateOutgoingRequest(id int, fileCid cid.Cid, p2pStream *P2
     return request
 }
 
-func (cn *ChatNode) ResolveOutgoingRequest(id int, status string) {
+func (cn *ChatNode) ResolveOutgoingRequest(reqID int, chatID int, status string) {
     cn.outgoingRequestsLock.Lock()
     defer cn.outgoingRequestsLock.Unlock()
-    request, ok := cn.outgoingRequests[id]
+    request, ok := cn.outgoingRequests[reqID]
     if ok {
+        request.ChatID = chatID
         request.Status = status
         if status == DECLINED {
             request.stream.Close()
@@ -461,12 +470,12 @@ func (cn *ChatNode) ResolveOutgoingRequest(id int, status string) {
     }
 }
 
-func (cn *ChatNode) GetOutgoingRequests() []*ChatRequest {
-    requests := []*ChatRequest{}
+func (cn *ChatNode) GetOutgoingRequests() []OutgoingChatRequest {
+    requests := []OutgoingChatRequest{}
     cn.outgoingRequestsLock.Lock()
     defer cn.outgoingRequestsLock.Unlock()
     for _, request := range cn.outgoingRequests {
-        requests = append(requests, request)
+        requests = append(requests, *request)
     }
     return requests
 }
@@ -506,13 +515,13 @@ func (cn *ChatNode) ResolveIncomingRequest(id int, peerID peer.ID, status string
     }
 }
 
-func (cn *ChatNode) GetIncomingRequests() []*ChatRequest {
-    requests := []*ChatRequest{}
+func (cn *ChatNode) GetIncomingRequests() []ChatRequest {
+    requests := []ChatRequest{}
     cn.incomingRequestsLock.Lock()
     defer cn.incomingRequestsLock.Unlock()
     for _, peerRequests := range cn.incomingRequests {
         for _, request := range peerRequests {
-            requests = append(requests, request)
+            requests = append(requests, *request)
         }
     }
     return requests
