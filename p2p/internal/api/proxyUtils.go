@@ -41,6 +41,7 @@ func ProxyNodeCreate(hostNode host.Host, kadDHT *dht.IpfsDHT, isProxy bool) *Pro
 		proxies:     make(map[peer.ID]bool),
 		connected:   false,
 		proxyPeerID: "",
+		clients:     make(map[peer.ID]bool),
 	}
 	hostNode.SetStreamHandler(proxyProtocol, pn.proxyStreamHandler)
 	return pn
@@ -115,9 +116,9 @@ func (pn *ProxyNode) handleForwarding(conn net.Conn) {
 func (pn *ProxyNode) ConnectToProxy(proxyPeerID peer.ID) error {
 
 	// check if proxyPeerID is a valid proxy
-	if !pn.IsProxy(proxyPeerID) {
-		return fmt.Errorf("peer is not a valid proxy")
-	}
+	// if !pn.IsProxy(proxyPeerID) {
+	// 	return fmt.Errorf("peer is not a valid proxy")
+	// }
 
 	// Establish a libp2p stream to the proxy
 	stream, err := p2pOpenStream(context.Background(), proxyProtocol, pn.host, pn.kadDHT, proxyPeerID.String())
