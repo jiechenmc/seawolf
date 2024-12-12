@@ -2,6 +2,7 @@
 
 ### Prerequisites
 
+- Use a Linux/Unix system like Ubuntu
 - See https://go.dev/doc/install to install `Go` 
 - See https://docs.docker.com/engine/install/ to install `Docker` and its `docker-compose-plugin`. We are using Ubuntu and used this guide: https://docs.docker.com/engine/install/ubuntu/.
 
@@ -11,8 +12,6 @@
 ```bash
 $ npm install && npm run dev
 ```
-
-The following steps assume you are on a `Linux/Unix` like system and you have `Go` and `Docker` installed and that you are at the root of the project. 
 
 
 ### Running BTCD and BTCWALLET
@@ -26,6 +25,8 @@ $ ./bootstrap.sh
 `bootstrap.sh` will compile p2p and create a container that will run `btcd`, `btcwallet` and another container that will run the `proxy`.
 
 ### Running p2p Backend
+
+Please rerun the command(s) below for each user and for each session. So if you reopen the electron app on the same device, you need to restart the p2p backend.
 
 ```bash
 $ ./p2p/seawolf_p2p
