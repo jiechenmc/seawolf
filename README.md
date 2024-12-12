@@ -10,7 +10,7 @@
 ### Running the Electron App
 
 ```bash
-$ npm install && npm run dev
+npm install && npm run dev
 ```
 
 
@@ -19,15 +19,17 @@ $ npm install && npm run dev
 Set the apporiate wallet seed in `docker-compose.yml` on line `12` before continuing. An empty wallet seed will result in the creation of a brand new wallet.
 
 ```bash
-$ ./bootstrap.sh
+./bootstrap.sh
 ```
 
 `bootstrap.sh` will compile p2p and create a container that will run `btcd`, `btcwallet` and another container that will run the `proxy`.
 
+Please rerun `./bootstrap.sh` after any changes to the wallet seed.
+
 ### Running p2p Backend
 
 ```bash
-$ ./p2p/seawolf_p2p
+./p2p/seawolf_p2p
 ```
 
 Please rerun `./p2p/seawolf_p2p` for each user and for each session. So if you reopen the electron app on the same device, you need to restart the p2p backend. Please also delete the `seawolf_p2p.db` file if you plan on registering/logging in as the same user.
